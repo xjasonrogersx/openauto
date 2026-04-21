@@ -35,6 +35,16 @@ namespace f1x::openauto::autoapp {
 
   }
 
+  void App::setConnectionStateHandler(std::function<void(bool)> handler) {
+    connectionStateHandler_ = std::move(handler);
+  }
+
+  void App::notifyConnectionStateChanged(bool connected) {
+    if (connectionStateHandler_) {
+      connectionStateHandler_(connected);
+    }
+  }
+
   void App::waitForUSBDevice() {
     strand_.dispatch([this, self = this->shared_from_this()]() {
       try {
@@ -79,6 +89,7 @@ namespace f1x::openauto::autoapp {
         auto tcpEndpoint(std::make_shared<aasdk::tcp::TCPEndpoint>(tcpWrapper_, std::move(socket)));
         androidAutoEntity_ = androidAutoEntityFactory_.create(std::move(tcpEndpoint));
         androidAutoEntity_->start(*this);
+        this->notifyConnectionStateChanged(true);
       }
       catch (const aasdk::error::Error &error) {
         OPENAUTO_LOG(error) << "[App] TCP AndroidAutoEntity create error: " << error.what();
@@ -115,6 +126,8 @@ namespace f1x::openauto::autoapp {
           OPENAUTO_LOG(error) << "[App] stop: exception caused by androidAutoEntity_.reset();";
         }
       }
+
+      this->notifyConnectionStateChanged(false);
     });
 
   }
@@ -136,6 +149,7 @@ namespace f1x::openauto::autoapp {
         auto aoapDevice(aasdk::usb::AOAPDevice::create(usbWrapper_, ioService_, deviceHandle));
         androidAutoEntity_ = androidAutoEntityFactory_.create(std::move(aoapDevice));
         androidAutoEntity_->start(*this);
+        this->notifyConnectionStateChanged(true);
       } else {
         OPENAUTO_LOG(info) << "[App] Start Android Auto not allowed - skip.";
       }
@@ -225,6 +239,8 @@ namespace f1x::openauto::autoapp {
           OPENAUTO_LOG(error) << "[App] onAndroidAutoQuit: exception caused by androidAutoEntity_.reset();";
         }
       }
+
+      this->notifyConnectionStateChanged(false);
 
       if (!isStopped_) {
         try {

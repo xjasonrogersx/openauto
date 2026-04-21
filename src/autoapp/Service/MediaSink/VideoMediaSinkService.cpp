@@ -17,7 +17,40 @@
 */
 
 #include <fstream>
+#include <iomanip>
+#include <sstream>
+#include <cstdlib>
+#include <typeinfo>
+
+#include <f1x/openauto/autoapp/MQTT/MQTTPublisher.hpp>
+#include <f1x/openauto/autoapp/Projection/QtVideoOutput.hpp>
+#ifdef USE_OMX
+#include <f1x/openauto/autoapp/Projection/OMXVideoOutput.hpp>
+#endif
 #include <f1x/openauto/autoapp/Service/MediaSink/VideoMediaSinkService.hpp>
+
+namespace {
+std::string envValueOrUnset(const char *name) {
+  const char *value = std::getenv(name);
+  if (value == nullptr || *value == '\0') {
+    return "<unset>";
+  }
+
+  return std::string(value);
+}
+
+void publishVideoDebug(aasdk::messenger::ChannelId channelId,
+                       const std::string &event,
+                       const std::string &details = {}) {
+  std::ostringstream message;
+  message << "channel=" << aasdk::messenger::channelIdToString(channelId);
+  if (!details.empty()) {
+    message << ", " << details;
+  }
+
+  ::f1x::openauto::autoapp::mqtt::publishDebugMessage("video", event, message.str());
+}
+}  // namespace
 
 namespace f1x {
   namespace openauto {
@@ -27,8 +60,109 @@ namespace f1x {
           VideoMediaSinkService::VideoMediaSinkService(boost::asio::io_service &ioService,
                                                        aasdk::channel::mediasink::video::IVideoMediaSinkService::Pointer channel,
                                                        projection::IVideoOutput::Pointer videoOutput)
-              : strand_(ioService), channel_(std::move(channel)), videoOutput_(std::move(videoOutput)), session_(-1) {
+              : strand_(ioService), channel_(std::move(channel)), videoOutput_(std::move(videoOutput)), session_(-1),
+                decodeBackend_("unknown"), decodeBackendDetails_("n/a"),
+                decoderElementName_("unknown"), decoderDetectionMethod_("none"),
+                backendBuffersPackets_(false), backendLikelyHardwareDecode_(false),
+                telemetryWindowStart_(std::chrono::steady_clock::now()), telemetryPackets_(0), telemetryBytes_(0),
+                telemetryTimestampedPackets_(0), firstTimestampInWindow_(0), lastTimestampInWindow_(0) {
+            this->initializeTelemetryMetadata();
 
+          }
+
+          void VideoMediaSinkService::initializeTelemetryMetadata() {
+            if (dynamic_cast<projection::QtVideoOutput *>(videoOutput_.get()) != nullptr) {
+              decodeBackend_ = "qt_qmediaplayer";
+              std::ostringstream details;
+              details << "playback=QMediaPlayer(StreamPlayback)"
+                      << ", gst_debug=" << envValueOrUnset("GST_DEBUG")
+                      << ", gst_plugin_path=" << envValueOrUnset("GST_PLUGIN_PATH")
+                      << ", qt_gst_videosink=" << envValueOrUnset("QT_GSTREAMER_WIDGET_VIDEOSINK");
+              decodeBackendDetails_ = details.str();
+              decoderElementName_ = "unavailable";
+              decoderDetectionMethod_ = "qt5_qmediaplayer_api_does_not_expose_decoder_element";
+              // Qt backend writes incoming bytes to SequentialBuffer before decode.
+              backendBuffersPackets_ = true;
+              // Qt/GStreamer may use HW decode, but this path cannot strictly confirm it.
+              backendLikelyHardwareDecode_ = false;
+              return;
+            }
+
+#ifdef USE_OMX
+            if (dynamic_cast<projection::OMXVideoOutput *>(videoOutput_.get()) != nullptr) {
+              decodeBackend_ = "omx_il";
+              decodeBackendDetails_ = "playback=OpenMAX IL (video_decode -> video_render)";
+              decoderElementName_ = "video_decode";
+              decoderDetectionMethod_ = "known_omx_pipeline";
+              backendBuffersPackets_ = false;
+              backendLikelyHardwareDecode_ = true;
+              return;
+            }
+#endif
+
+            decodeBackend_ = typeid(*videoOutput_).name();
+            decodeBackendDetails_ = "playback=unknown backend type";
+            decoderElementName_ = "unknown";
+            decoderDetectionMethod_ = "unknown_backend_type";
+          }
+
+          void VideoMediaSinkService::maybePublishVideoTelemetry(aasdk::messenger::Timestamp::ValueType timestamp,
+                                                                 std::size_t packetSize) {
+            ++telemetryPackets_;
+            telemetryBytes_ += static_cast<uint64_t>(packetSize);
+
+            if (timestamp != 0) {
+              ++telemetryTimestampedPackets_;
+              if (firstTimestampInWindow_ == 0) {
+                firstTimestampInWindow_ = timestamp;
+              }
+              if (timestamp > lastTimestampInWindow_) {
+                lastTimestampInWindow_ = timestamp;
+              }
+            }
+
+            const auto now = std::chrono::steady_clock::now();
+            const auto elapsed = now - telemetryWindowStart_;
+            if (elapsed < std::chrono::seconds(1)) {
+              return;
+            }
+
+            const double elapsedSeconds = std::chrono::duration_cast<std::chrono::duration<double>>(elapsed).count();
+            const double packetRate = elapsedSeconds > 0.0 ? static_cast<double>(telemetryPackets_) / elapsedSeconds : 0.0;
+            const double ingressMbps = elapsedSeconds > 0.0
+                ? (static_cast<double>(telemetryBytes_) * 8.0) / (elapsedSeconds * 1000.0 * 1000.0)
+                : 0.0;
+
+            std::ostringstream details;
+            details << std::fixed << std::setprecision(2)
+                    << "backend=" << decodeBackend_
+                    << ", likely_hw_decode=" << (backendLikelyHardwareDecode_ ? "true" : "false")
+                    << ", packet_buffering=" << (backendBuffersPackets_ ? "true" : "false")
+                    << ", ingress_pps=" << packetRate
+                    << ", ingress_mbps=" << ingressMbps
+                    << ", packets=" << telemetryPackets_
+                    << ", bytes=" << telemetryBytes_;
+
+            if (telemetryTimestampedPackets_ >= 2 && lastTimestampInWindow_ > firstTimestampInWindow_) {
+              const double timestampSpanSeconds =
+                  static_cast<double>(lastTimestampInWindow_ - firstTimestampInWindow_) / 1000000.0;
+              if (timestampSpanSeconds > 0.0) {
+                const double sourceFpsEstimate =
+                    static_cast<double>(telemetryTimestampedPackets_ - 1) / timestampSpanSeconds;
+                details << ", source_fps_est=" << sourceFpsEstimate;
+              }
+            } else {
+              details << ", source_fps_est=n/a";
+            }
+
+            publishVideoDebug(channel_->getId(), "stream_telemetry", details.str());
+
+            telemetryWindowStart_ = now;
+            telemetryPackets_ = 0;
+            telemetryBytes_ = 0;
+            telemetryTimestampedPackets_ = 0;
+            firstTimestampInWindow_ = 0;
+            lastTimestampInWindow_ = 0;
           }
 
           void VideoMediaSinkService::start() {
@@ -36,6 +170,21 @@ namespace f1x {
               OPENAUTO_LOG(info) << "[VideoMediaSinkService] start()";
               OPENAUTO_LOG(info) << "[VideoMediaSinkService] Channel "
                                  << aasdk::messenger::channelIdToString(channel_->getId());
+              {
+                std::ostringstream details;
+                details << "backend=" << decodeBackend_
+                  << ", backend_details=" << decodeBackendDetails_
+                        << ", likely_hw_decode=" << (backendLikelyHardwareDecode_ ? "true" : "false")
+                        << ", packet_buffering=" << (backendBuffersPackets_ ? "true" : "false");
+                publishVideoDebug(channel_->getId(), "service_started", details.str());
+              }
+              {
+                std::ostringstream details;
+                details << "backend=" << decodeBackend_
+                        << ", decoder_element=" << decoderElementName_
+                        << ", detection_method=" << decoderDetectionMethod_;
+                publishVideoDebug(channel_->getId(), "decoder_probe", details.str());
+              }
               channel_->receive(this->shared_from_this());
             });
           }
@@ -45,6 +194,7 @@ namespace f1x {
               OPENAUTO_LOG(info) << "[VideoMediaSinkService] stop()";
               OPENAUTO_LOG(info) << "[VideoMediaSinkService] Channel "
                                  << aasdk::messenger::channelIdToString(channel_->getId());
+              publishVideoDebug(channel_->getId(), "service_stopped");
               videoOutput_->stop();
             });
           }
@@ -54,6 +204,7 @@ namespace f1x {
               OPENAUTO_LOG(info) << "[VideoMediaSinkService] pause()";
               OPENAUTO_LOG(info) << "[VideoMediaSinkService] Channel "
                                  << aasdk::messenger::channelIdToString(channel_->getId());
+              publishVideoDebug(channel_->getId(), "paused");
             });
           }
 
@@ -62,6 +213,7 @@ namespace f1x {
               OPENAUTO_LOG(info) << "[VideoMediaSinkService] resume()";
               OPENAUTO_LOG(info) << "[VideoMediaSinkService] Channel "
                                  << aasdk::messenger::channelIdToString(channel_->getId());
+              publishVideoDebug(channel_->getId(), "resumed");
 
             });
           }
@@ -111,6 +263,12 @@ namespace f1x {
                           : aap_protobuf::service::media::shared::message::Config::STATUS_WAIT;
 
             OPENAUTO_LOG(debug) << "[VideoMediaSinkService] setup status: " << Config_Status_Name(status);
+            {
+              std::ostringstream details;
+              details << "codec=" << MediaCodecType_Name(request.type())
+                      << ", status=" << Config_Status_Name(status);
+              publishVideoDebug(channel_->getId(), "setup", details.str());
+            }
 
             aap_protobuf::service::media::shared::message::Config response;
             response.set_status(status);
@@ -123,6 +281,14 @@ namespace f1x {
                                     std::placeholders::_1));
 
             channel_->sendChannelSetupResponse(response, std::move(promise));
+            {
+              std::ostringstream telemetryDetails;
+              telemetryDetails << "max_unacked=" << response.max_unacked()
+                               << ", backend=" << decodeBackend_
+                               << ", likely_hw_decode=" << (backendLikelyHardwareDecode_ ? "true" : "false")
+                               << ", packet_buffering=" << (backendBuffersPackets_ ? "true" : "false");
+              publishVideoDebug(channel_->getId(), "channel_setup_flow", telemetryDetails.str());
+            }
             channel_->receive(this->shared_from_this());
           }
 
@@ -137,6 +303,12 @@ namespace f1x {
 
             OPENAUTO_LOG(info) << "[VideoMediaSinkService] Status determined: "
                                << aap_protobuf::shared::MessageStatus_Name(status);
+            {
+              std::ostringstream details;
+              details << "status=" << aap_protobuf::shared::MessageStatus_Name(status)
+                      << ", priority=" << request.priority();
+              publishVideoDebug(channel_->getId(), "channel_opened", details.str());
+            }
 
             aap_protobuf::service::control::message::ChannelOpenResponse response;
             response.set_status(status);
@@ -156,6 +328,7 @@ namespace f1x {
                                << indication.session_id();
 
             session_ = indication.session_id();
+            publishVideoDebug(channel_->getId(), "stream_started", std::string("session=") + std::to_string(session_));
             channel_->receive(this->shared_from_this());
           }
 
@@ -165,6 +338,7 @@ namespace f1x {
             OPENAUTO_LOG(info) << "[onMediaChannelStopIndication] Channel Id: "
                                << aasdk::messenger::channelIdToString(channel_->getId()) << ", session: " << session_;
 
+            publishVideoDebug(channel_->getId(), "stream_stopped", std::string("session=") + std::to_string(session_));
             channel_->receive(this->shared_from_this());
           }
 
@@ -173,6 +347,8 @@ namespace f1x {
             OPENAUTO_LOG(debug) << "[VideoMediaSinkService] onMediaWithTimestampIndication()";
             OPENAUTO_LOG(debug) << "[VideoMediaSinkService] Channel Id: "
                                << aasdk::messenger::channelIdToString(channel_->getId()) << ", session: " << session_;
+
+            this->maybePublishVideoTelemetry(timestamp, buffer.size);
 
             videoOutput_->write(timestamp, buffer);
 
@@ -202,6 +378,7 @@ namespace f1x {
               OPENAUTO_LOG(error) << "[VideoMediaSinkService] onChannelError(): " << e.what()
                                   << ", channel: " << aasdk::messenger::channelIdToString(channel_->getId());
             }
+            publishVideoDebug(channel_->getId(), "channel_error", e.what());
           }
 
           void VideoMediaSinkService::onVideoFocusRequest(
@@ -212,6 +389,12 @@ namespace f1x {
             #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
             OPENAUTO_LOG(info) << "[VideoMediaSinkService] Display index: " << request.disp_channel_id() << ", focus mode: " << VideoFocusMode_Name(request.mode()) << ", focus reason: " << VideoFocusReason_Name(request.reason());
             #pragma GCC diagnostic pop
+            {
+              std::ostringstream details;
+              details << "mode=" << VideoFocusMode_Name(request.mode())
+                      << ", reason=" << VideoFocusReason_Name(request.reason());
+              publishVideoDebug(channel_->getId(), "focus_request", details.str());
+            }
 
             if (request.mode() ==
                 aap_protobuf::service::media::video::message::VideoFocusMode::VIDEO_FOCUS_NATIVE) {

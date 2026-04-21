@@ -1750,6 +1750,9 @@ void f1x::openauto::autoapp::ui::MainWindow::on_AlbumCoverListView_clicked(const
 
 void f1x::openauto::autoapp::ui::MainWindow::tmpChanged()
 {
+
+OPENAUTO_LOG(info) << "tmpChanged **** ";
+
     try {
         if (std::ifstream("/tmp/entityexit")) {
             MainWindow::TriggerAppStop();

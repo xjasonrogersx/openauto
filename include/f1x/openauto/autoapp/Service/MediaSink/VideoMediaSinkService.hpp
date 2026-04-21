@@ -18,6 +18,10 @@
 
 #pragma once
 
+#include <chrono>
+#include <cstdint>
+#include <string>
+
 #include <aasdk/Messenger/IMessenger.hpp>
 #include <aasdk/Channel/MediaSink/Video/IVideoMediaSinkService.hpp>
 #include <aasdk/Channel/MediaSink/Video/IVideoMediaSinkServiceEventHandler.hpp>
@@ -70,10 +74,25 @@ namespace f1x {
             void sendVideoFocusIndication();
           protected:
             using std::enable_shared_from_this<VideoMediaSinkService>::shared_from_this;
+            void initializeTelemetryMetadata();
+            void maybePublishVideoTelemetry(aasdk::messenger::Timestamp::ValueType timestamp, std::size_t packetSize);
+
             boost::asio::io_service::strand strand_;
             aasdk::channel::mediasink::video::IVideoMediaSinkService::Pointer channel_;
             projection::IVideoOutput::Pointer videoOutput_;
             int32_t session_;
+            std::string decodeBackend_;
+            std::string decodeBackendDetails_;
+            std::string decoderElementName_;
+            std::string decoderDetectionMethod_;
+            bool backendBuffersPackets_;
+            bool backendLikelyHardwareDecode_;
+            std::chrono::steady_clock::time_point telemetryWindowStart_;
+            uint64_t telemetryPackets_;
+            uint64_t telemetryBytes_;
+            uint64_t telemetryTimestampedPackets_;
+            aasdk::messenger::Timestamp::ValueType firstTimestampInWindow_;
+            aasdk::messenger::Timestamp::ValueType lastTimestampInWindow_;
           };
         }
       }
