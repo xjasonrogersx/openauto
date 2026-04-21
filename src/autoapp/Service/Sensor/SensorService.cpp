@@ -235,19 +235,22 @@ namespace f1x::openauto::autoapp::service::sensor {
           this->previous = this->isNight;
           this->sendNightData();
         }
-        bool gpsDataAvailable = false;
-#if GPSD_API_MAJOR_VERSION >= 7
-        if (gps_read (&this->gpsData_, NULL, 0) != -1) {
-          gpsDataAvailable = true;
+          bool gpsDataAvailable = false;
+        bool gpsHasWaitingData = false;
+        if (this->gpsEnabled_) {
+      #if GPSD_API_MAJOR_VERSION >= 7
+          gpsDataAvailable = (gps_read(&this->gpsData_, NULL, 0) != -1);
+      #else
+          gpsDataAvailable = (gps_read(&this->gpsData_) != -1);
+      #endif
+          if (gpsDataAvailable) {
+            gpsHasWaitingData = gps_waiting(&this->gpsData_, 0);
+          }
         }
-#else
-        if (gps_read (&this->gpsData_) != -1) {
-                    gpsDataAvailable = true;
-                }
-#endif
+
         if ((this->gpsEnabled_) &&
-            (gps_waiting(&this->gpsData_, 0)) &&
-            (gpsDataAvailable == true) &&
+            (gpsHasWaitingData) &&
+            (gpsDataAvailable) &&
             (this->gpsData_.fix.mode == MODE_2D || this->gpsData_.fix.mode == MODE_3D) &&
             (this->gpsData_.set & TIME_SET) &&
             (this->gpsData_.set & LATLON_SET))
