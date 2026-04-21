@@ -82,6 +82,9 @@ namespace f1x {
             projection::IVideoOutput::Pointer videoOutput_;
             int32_t session_;
             std::string decodeBackend_;
+            std::string decodeBackendDetails_;
+            std::string decoderElementName_;
+            std::string decoderDetectionMethod_;
             bool backendBuffersPackets_;
             bool backendLikelyHardwareDecode_;
             std::chrono::steady_clock::time_point telemetryWindowStart_;

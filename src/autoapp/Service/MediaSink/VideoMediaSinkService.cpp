@@ -19,6 +19,7 @@
 #include <fstream>
 #include <iomanip>
 #include <sstream>
+#include <cstdlib>
 #include <typeinfo>
 
 #include <f1x/openauto/autoapp/MQTT/MQTTPublisher.hpp>
@@ -29,6 +30,15 @@
 #include <f1x/openauto/autoapp/Service/MediaSink/VideoMediaSinkService.hpp>
 
 namespace {
+std::string envValueOrUnset(const char *name) {
+  const char *value = std::getenv(name);
+  if (value == nullptr || *value == '\0') {
+    return "<unset>";
+  }
+
+  return std::string(value);
+}
+
 void publishVideoDebug(aasdk::messenger::ChannelId channelId,
                        const std::string &event,
                        const std::string &details = {}) {
@@ -51,7 +61,9 @@ namespace f1x {
                                                        aasdk::channel::mediasink::video::IVideoMediaSinkService::Pointer channel,
                                                        projection::IVideoOutput::Pointer videoOutput)
               : strand_(ioService), channel_(std::move(channel)), videoOutput_(std::move(videoOutput)), session_(-1),
-                decodeBackend_("unknown"), backendBuffersPackets_(false), backendLikelyHardwareDecode_(false),
+                decodeBackend_("unknown"), decodeBackendDetails_("n/a"),
+                decoderElementName_("unknown"), decoderDetectionMethod_("none"),
+                backendBuffersPackets_(false), backendLikelyHardwareDecode_(false),
                 telemetryWindowStart_(std::chrono::steady_clock::now()), telemetryPackets_(0), telemetryBytes_(0),
                 telemetryTimestampedPackets_(0), firstTimestampInWindow_(0), lastTimestampInWindow_(0) {
             this->initializeTelemetryMetadata();
@@ -61,6 +73,14 @@ namespace f1x {
           void VideoMediaSinkService::initializeTelemetryMetadata() {
             if (dynamic_cast<projection::QtVideoOutput *>(videoOutput_.get()) != nullptr) {
               decodeBackend_ = "qt_qmediaplayer";
+              std::ostringstream details;
+              details << "playback=QMediaPlayer(StreamPlayback)"
+                      << ", gst_debug=" << envValueOrUnset("GST_DEBUG")
+                      << ", gst_plugin_path=" << envValueOrUnset("GST_PLUGIN_PATH")
+                      << ", qt_gst_videosink=" << envValueOrUnset("QT_GSTREAMER_WIDGET_VIDEOSINK");
+              decodeBackendDetails_ = details.str();
+              decoderElementName_ = "unavailable";
+              decoderDetectionMethod_ = "qt5_qmediaplayer_api_does_not_expose_decoder_element";
               // Qt backend writes incoming bytes to SequentialBuffer before decode.
               backendBuffersPackets_ = true;
               // Qt/GStreamer may use HW decode, but this path cannot strictly confirm it.
@@ -71,6 +91,9 @@ namespace f1x {
 #ifdef USE_OMX
             if (dynamic_cast<projection::OMXVideoOutput *>(videoOutput_.get()) != nullptr) {
               decodeBackend_ = "omx_il";
+              decodeBackendDetails_ = "playback=OpenMAX IL (video_decode -> video_render)";
+              decoderElementName_ = "video_decode";
+              decoderDetectionMethod_ = "known_omx_pipeline";
               backendBuffersPackets_ = false;
               backendLikelyHardwareDecode_ = true;
               return;
@@ -78,6 +101,9 @@ namespace f1x {
 #endif
 
             decodeBackend_ = typeid(*videoOutput_).name();
+            decodeBackendDetails_ = "playback=unknown backend type";
+            decoderElementName_ = "unknown";
+            decoderDetectionMethod_ = "unknown_backend_type";
           }
 
           void VideoMediaSinkService::maybePublishVideoTelemetry(aasdk::messenger::Timestamp::ValueType timestamp,
@@ -147,9 +173,17 @@ namespace f1x {
               {
                 std::ostringstream details;
                 details << "backend=" << decodeBackend_
+                  << ", backend_details=" << decodeBackendDetails_
                         << ", likely_hw_decode=" << (backendLikelyHardwareDecode_ ? "true" : "false")
                         << ", packet_buffering=" << (backendBuffersPackets_ ? "true" : "false");
                 publishVideoDebug(channel_->getId(), "service_started", details.str());
+              }
+              {
+                std::ostringstream details;
+                details << "backend=" << decodeBackend_
+                        << ", decoder_element=" << decoderElementName_
+                        << ", detection_method=" << decoderDetectionMethod_;
+                publishVideoDebug(channel_->getId(), "decoder_probe", details.str());
               }
               channel_->receive(this->shared_from_this());
             });
