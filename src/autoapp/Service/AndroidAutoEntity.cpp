@@ -17,7 +17,9 @@
 */
 
 #include <aasdk/Channel/Control/ControlServiceChannel.hpp>
+#include <optional>
 #include <f1x/openauto/autoapp/Service/AndroidAutoEntity.hpp>
+#include <f1x/openauto/autoapp/MQTT/MQTTPublisher.hpp>
 #include <f1x/openauto/Common/Log.hpp>
 
 namespace f1x {
@@ -295,6 +297,18 @@ namespace f1x {
 
         void AndroidAutoEntity::onBatteryStatusNotification(const aap_protobuf::service::control::message::BatteryStatusNotification &notification) {
           OPENAUTO_LOG(info) << "[AndroidAutoEntity] onBatteryStatusNotification()";
+          OPENAUTO_LOG(debug) << "[AndroidAutoEntity] Battery level: " << notification.battery_level()
+                              << ", time remaining present: " << notification.has_time_remaining_s()
+                              << ", critical present: " << notification.has_critical_battery();
+
+          const auto timeRemaining = notification.has_time_remaining_s()
+              ? std::optional<uint32_t>(notification.time_remaining_s())
+              : std::nullopt;
+          const auto criticalBattery = notification.has_critical_battery()
+              ? std::optional<bool>(notification.critical_battery())
+              : std::nullopt;
+
+          ::f1x::openauto::autoapp::mqtt::publishBatteryStatus(notification.battery_level(), timeRemaining, criticalBattery);
           controlServiceChannel_->receive(this->shared_from_this());
         }
 

@@ -17,7 +17,24 @@
 */
 
 #include <fstream>
+#include <sstream>
+
+#include <f1x/openauto/autoapp/MQTT/MQTTPublisher.hpp>
 #include <f1x/openauto/autoapp/Service/MediaSink/VideoMediaSinkService.hpp>
+
+namespace {
+void publishVideoDebug(aasdk::messenger::ChannelId channelId,
+                       const std::string &event,
+                       const std::string &details = {}) {
+  std::ostringstream message;
+  message << "channel=" << aasdk::messenger::channelIdToString(channelId);
+  if (!details.empty()) {
+    message << ", " << details;
+  }
+
+  ::f1x::openauto::autoapp::mqtt::publishDebugMessage("video", event, message.str());
+}
+}  // namespace
 
 namespace f1x {
   namespace openauto {
@@ -36,6 +53,7 @@ namespace f1x {
               OPENAUTO_LOG(info) << "[VideoMediaSinkService] start()";
               OPENAUTO_LOG(info) << "[VideoMediaSinkService] Channel "
                                  << aasdk::messenger::channelIdToString(channel_->getId());
+              publishVideoDebug(channel_->getId(), "service_started");
               channel_->receive(this->shared_from_this());
             });
           }
@@ -45,6 +63,7 @@ namespace f1x {
               OPENAUTO_LOG(info) << "[VideoMediaSinkService] stop()";
               OPENAUTO_LOG(info) << "[VideoMediaSinkService] Channel "
                                  << aasdk::messenger::channelIdToString(channel_->getId());
+              publishVideoDebug(channel_->getId(), "service_stopped");
               videoOutput_->stop();
             });
           }
@@ -54,6 +73,7 @@ namespace f1x {
               OPENAUTO_LOG(info) << "[VideoMediaSinkService] pause()";
               OPENAUTO_LOG(info) << "[VideoMediaSinkService] Channel "
                                  << aasdk::messenger::channelIdToString(channel_->getId());
+              publishVideoDebug(channel_->getId(), "paused");
             });
           }
 
@@ -62,6 +82,7 @@ namespace f1x {
               OPENAUTO_LOG(info) << "[VideoMediaSinkService] resume()";
               OPENAUTO_LOG(info) << "[VideoMediaSinkService] Channel "
                                  << aasdk::messenger::channelIdToString(channel_->getId());
+              publishVideoDebug(channel_->getId(), "resumed");
 
             });
           }
@@ -111,6 +132,12 @@ namespace f1x {
                           : aap_protobuf::service::media::shared::message::Config::STATUS_WAIT;
 
             OPENAUTO_LOG(debug) << "[VideoMediaSinkService] setup status: " << Config_Status_Name(status);
+            {
+              std::ostringstream details;
+              details << "codec=" << MediaCodecType_Name(request.type())
+                      << ", status=" << Config_Status_Name(status);
+              publishVideoDebug(channel_->getId(), "setup", details.str());
+            }
 
             aap_protobuf::service::media::shared::message::Config response;
             response.set_status(status);
@@ -137,6 +164,12 @@ namespace f1x {
 
             OPENAUTO_LOG(info) << "[VideoMediaSinkService] Status determined: "
                                << aap_protobuf::shared::MessageStatus_Name(status);
+            {
+              std::ostringstream details;
+              details << "status=" << aap_protobuf::shared::MessageStatus_Name(status)
+                      << ", priority=" << request.priority();
+              publishVideoDebug(channel_->getId(), "channel_opened", details.str());
+            }
 
             aap_protobuf::service::control::message::ChannelOpenResponse response;
             response.set_status(status);
@@ -156,6 +189,7 @@ namespace f1x {
                                << indication.session_id();
 
             session_ = indication.session_id();
+            publishVideoDebug(channel_->getId(), "stream_started", std::string("session=") + std::to_string(session_));
             channel_->receive(this->shared_from_this());
           }
 
@@ -165,6 +199,7 @@ namespace f1x {
             OPENAUTO_LOG(info) << "[onMediaChannelStopIndication] Channel Id: "
                                << aasdk::messenger::channelIdToString(channel_->getId()) << ", session: " << session_;
 
+            publishVideoDebug(channel_->getId(), "stream_stopped", std::string("session=") + std::to_string(session_));
             channel_->receive(this->shared_from_this());
           }
 
@@ -202,6 +237,7 @@ namespace f1x {
               OPENAUTO_LOG(error) << "[VideoMediaSinkService] onChannelError(): " << e.what()
                                   << ", channel: " << aasdk::messenger::channelIdToString(channel_->getId());
             }
+            publishVideoDebug(channel_->getId(), "channel_error", e.what());
           }
 
           void VideoMediaSinkService::onVideoFocusRequest(
@@ -212,6 +248,12 @@ namespace f1x {
             #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
             OPENAUTO_LOG(info) << "[VideoMediaSinkService] Display index: " << request.disp_channel_id() << ", focus mode: " << VideoFocusMode_Name(request.mode()) << ", focus reason: " << VideoFocusReason_Name(request.reason());
             #pragma GCC diagnostic pop
+            {
+              std::ostringstream details;
+              details << "mode=" << VideoFocusMode_Name(request.mode())
+                      << ", reason=" << VideoFocusReason_Name(request.reason());
+              publishVideoDebug(channel_->getId(), "focus_request", details.str());
+            }
 
             if (request.mode() ==
                 aap_protobuf::service::media::video::message::VideoFocusMode::VIDEO_FOCUS_NATIVE) {

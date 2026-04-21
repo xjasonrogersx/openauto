@@ -16,8 +16,25 @@
 *  along with openauto. If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <sstream>
+
 #include <f1x/openauto/Common/Log.hpp>
+#include <f1x/openauto/autoapp/MQTT/MQTTPublisher.hpp>
 #include <f1x/openauto/autoapp/Service/MediaSink/AudioMediaSinkService.hpp>
+
+namespace {
+void publishAudioDebug(aasdk::messenger::ChannelId channelId,
+                       const std::string &event,
+                       const std::string &details = {}) {
+  std::ostringstream message;
+  message << "channel=" << aasdk::messenger::channelIdToString(channelId);
+  if (!details.empty()) {
+    message << ", " << details;
+  }
+
+  ::f1x::openauto::autoapp::mqtt::publishDebugMessage("audio", event, message.str());
+}
+}  // namespace
 
 namespace f1x {
   namespace openauto {
@@ -36,6 +53,7 @@ namespace f1x {
             strand_.dispatch([this, self = this->shared_from_this()]() {
               OPENAUTO_LOG(info) << "[AudioMediaSinkService] start()";
               OPENAUTO_LOG(info) << "[AudioMediaSinkService] Channel " << aasdk::messenger::channelIdToString(channel_->getId());
+              publishAudioDebug(channel_->getId(), "service_started");
               channel_->receive(this->shared_from_this());
             });
           }
@@ -44,6 +62,7 @@ namespace f1x {
             strand_.dispatch([this, self = this->shared_from_this()]() {
               OPENAUTO_LOG(info) << "[AudioMediaSinkService] stop()";
               OPENAUTO_LOG(info) << "[AudioMediaSinkService] Channel " << aasdk::messenger::channelIdToString(channel_->getId());
+              publishAudioDebug(channel_->getId(), "service_stopped");
               audioOutput_->stop();
             });
           }
@@ -52,6 +71,7 @@ namespace f1x {
             strand_.dispatch([this, self = this->shared_from_this()]() {
               OPENAUTO_LOG(info) << "[AudioMediaSinkService] pause()";
               OPENAUTO_LOG(info) << "[AudioMediaSinkService] Channel " << aasdk::messenger::channelIdToString(channel_->getId());
+              publishAudioDebug(channel_->getId(), "paused");
 
             });
           }
@@ -60,6 +80,7 @@ namespace f1x {
             strand_.dispatch([this, self = this->shared_from_this()]() {
               OPENAUTO_LOG(info) << "[AudioMediaSinkService] resume()";
               OPENAUTO_LOG(info) << "[AudioMediaSinkService] Channel " << aasdk::messenger::channelIdToString(channel_->getId());
+              publishAudioDebug(channel_->getId(), "resumed");
 
             });
           }
@@ -137,6 +158,12 @@ namespace f1x {
                                                                : aap_protobuf::shared::MessageStatus::STATUS_INVALID_CHANNEL;
 
             OPENAUTO_LOG(debug) << "[AudioMediaSinkService] Status determined: " << aap_protobuf::shared::MessageStatus_Name(status);
+            {
+              std::ostringstream details;
+              details << "status=" << aap_protobuf::shared::MessageStatus_Name(status)
+                      << ", priority=" << request.priority();
+              publishAudioDebug(channel_->getId(), "channel_opened", details.str());
+            }
 
             aap_protobuf::service::control::message::ChannelOpenResponse response;
             response.set_status(status);
@@ -158,6 +185,7 @@ namespace f1x {
               OPENAUTO_LOG(error) << "[AudioMediaSinkService] onChannelError(): " << e.what()
                                   << ", channel: " << aasdk::messenger::channelIdToString(channel_->getId());
             }
+            publishAudioDebug(channel_->getId(), "channel_error", e.what());
           }
 
           /*
@@ -167,6 +195,7 @@ namespace f1x {
           void AudioMediaSinkService::onMediaChannelSetupRequest(const aap_protobuf::service::media::shared::message::Setup &request) {
             OPENAUTO_LOG(info) << "[AudioMediaSinkService] onMediaChannelSetupRequest()";
             OPENAUTO_LOG(info) << "[AudioMediaSinkService] Channel Id: " << aasdk::messenger::channelIdToString(channel_->getId()) << ", Codec: " << MediaCodecType_Name(request.type());
+            publishAudioDebug(channel_->getId(), "setup", std::string("codec=") + MediaCodecType_Name(request.type()));
 
             aap_protobuf::service::media::shared::message::Config response;
             auto status = aap_protobuf::service::media::shared::message::Config::STATUS_READY;
@@ -187,6 +216,7 @@ namespace f1x {
             OPENAUTO_LOG(info) << "[AudioMediaSinkService] onMediaChannelStartIndication()";
             OPENAUTO_LOG(info) << "[AudioMediaSinkService] Channel Id: " << aasdk::messenger::channelIdToString(channel_->getId()) << ", session: " << indication.session_id();
             session_ = indication.session_id();
+            publishAudioDebug(channel_->getId(), "stream_started", std::string("session=") + std::to_string(session_));
             audioOutput_->start();
             channel_->receive(this->shared_from_this());
           }
@@ -195,6 +225,7 @@ namespace f1x {
             OPENAUTO_LOG(info) << "[AudioMediaSinkService] onMediaChannelStopIndication()";
             OPENAUTO_LOG(info) << "[AudioMediaSinkService] Channel Id: " << aasdk::messenger::channelIdToString(channel_->getId()) << ", session: " << session_;
 
+            publishAudioDebug(channel_->getId(), "stream_stopped", std::string("session=") + std::to_string(session_));
             session_ = -1;
             audioOutput_->suspend();
 
