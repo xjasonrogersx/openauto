@@ -18,6 +18,7 @@
 
 #pragma once
 
+#include <functional>
 #include <aasdk/USB/IUSBHub.hpp>
 #include <aasdk/USB/IConnectedAccessoriesEnumerator.hpp>
 #include <aasdk/USB/USBWrapper.hpp>
@@ -47,6 +48,7 @@ public:
     void pause();
     void resume();
     void onAndroidAutoQuit() override;
+    void setConnectionStateHandler(std::function<void(bool)> handler);
     bool disableAutostartEntity = false;
 
 private:
@@ -55,6 +57,7 @@ private:
     void waitForDevice();
     void aoapDeviceHandler(aasdk::usb::DeviceHandle deviceHandle);
     void onUSBHubError(const aasdk::error::Error& error);
+    void notifyConnectionStateChanged(bool connected);
 
     boost::asio::io_service& ioService_;
     aasdk::usb::USBWrapper& usbWrapper_;
@@ -66,6 +69,7 @@ private:
     boost::asio::ip::tcp::acceptor acceptor_;
     service::IAndroidAutoEntity::Pointer androidAutoEntity_;
     bool isStopped_;
+    std::function<void(bool)> connectionStateHandler_;
 
     void startServerSocket();
 

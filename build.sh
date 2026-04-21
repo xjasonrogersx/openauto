@@ -22,7 +22,7 @@ set -e
 # Usage: ./build.sh [release|debug] [--clean] [--package] [--output-dir DIR]
 
 # Default values
-NOPI_FLAG="-DNOPI=ON"
+NOPI_FLAG="-DNOPI=ON"  ## OFF - Use OMX   ON - Used GStreamer via QT  
 CLEAN_BUILD=false
 PACKAGE=false
 OUTPUT_DIR="/output"
@@ -249,19 +249,19 @@ if [ "$PACKAGE" = true ]; then
     cd "${SOURCE_DIR}"
     
     # Copy packages to output directory
-    if [ -n "$OUTPUT_DIR" ] && [ "$OUTPUT_DIR" != "${BUILD_DIR}" ]; then
-        echo ""
-        echo "Copying packages to ${OUTPUT_DIR}..."
-        mkdir -p "${OUTPUT_DIR}"
-        find "${BUILD_DIR}" -name "*.deb" -exec cp -v {} "${OUTPUT_DIR}/" \;
-        echo ""
-        echo "Packages in ${OUTPUT_DIR}:"
-        ls -lh "${OUTPUT_DIR}"/*.deb 2>/dev/null || echo "No packages found"
-    else
-        echo ""
-        echo "Packages in ${BUILD_DIR}:"
-        find "${BUILD_DIR}" -name "*.deb" -ls
-    fi
+    # if [ -n "$OUTPUT_DIR" ] && [ "$OUTPUT_DIR" != "${BUILD_DIR}" ]; then
+    #    echo ""
+    #    echo "Copying packages to ${OUTPUT_DIR}..."
+    #    mkdir -p "${OUTPUT_DIR}"
+    #    find "${BUILD_DIR}" -name "*.deb" -exec cp -v {} "${OUTPUT_DIR}/" \;
+    #    echo ""
+    #    echo "Packages in ${OUTPUT_DIR}:"
+    #    ls -lh "${OUTPUT_DIR}"/*.deb 2>/dev/null || echo "No packages found"
+    #else
+    #    echo ""
+    #    echo "Packages in OUTPUT_DIR${BUILD_DIR}:"
+    #    find "${BUILD_DIR}" -name "*.deb" -ls
+    #fi
 fi
 
 echo ""

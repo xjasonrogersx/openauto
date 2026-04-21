@@ -270,7 +270,7 @@ namespace f1x::openauto::autoapp::service::sensor {
   }
 
   bool SensorService::is_file_exist(const char *fileName) {
-    OPENAUTO_LOG(info) << "[SensorService] is_file_exist()";
+    //jr OPENAUTO_LOG(info) << "[SensorService] is_file_exist()";
     std::ifstream ifile(fileName, std::ios::in);
     return ifile.good();
   }

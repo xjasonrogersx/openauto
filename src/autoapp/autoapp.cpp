@@ -17,19 +17,26 @@
 */
 
 #include <thread>
+#include <algorithm>
+#include <cctype>
+#include <optional>
 #include <QApplication>
 #include <QScreen>
 #include <QDesktopWidget>
+#include <QMetaObject>
 #include <aasdk/USB/USBHub.hpp>
 #include <aasdk/USB/ConnectedAccessoriesEnumerator.hpp>
 #include <aasdk/USB/AccessoryModeQueryChain.hpp>
 #include <aasdk/USB/AccessoryModeQueryChainFactory.hpp>
 #include <aasdk/USB/AccessoryModeQueryFactory.hpp>
 #include <aasdk/TCP/TCPWrapper.hpp>
+#include <boost/log/core.hpp>
+#include <boost/log/expressions.hpp>
 #include <boost/log/utility/setup.hpp>
 #include <f1x/openauto/autoapp/App.hpp>
 #include <f1x/openauto/autoapp/Configuration/IConfiguration.hpp>
 #include <f1x/openauto/autoapp/Configuration/RecentAddressesList.hpp>
+#include <f1x/openauto/autoapp/MQTT/MQTTPublisher.hpp>
 #include <f1x/openauto/autoapp/Service/AndroidAutoEntityFactory.hpp>
 #include <f1x/openauto/autoapp/Service/ServiceFactory.hpp>
 #include <f1x/openauto/autoapp/Configuration/Configuration.hpp>
@@ -42,6 +49,74 @@
 
 namespace autoapp = f1x::openauto::autoapp;
 using ThreadPool = std::vector<std::thread>;
+
+namespace {
+
+std::optional<boost::log::trivial::severity_level> parseLogLevel(const std::string& value)
+{
+    std::string normalized = value;
+    std::transform(normalized.begin(), normalized.end(), normalized.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+    if (normalized == "trace") {
+        return boost::log::trivial::trace;
+    }
+    if (normalized == "debug") {
+        return boost::log::trivial::debug;
+    }
+    if (normalized == "info") {
+        return boost::log::trivial::info;
+    }
+    if (normalized == "warning") {
+        return boost::log::trivial::warning;
+    }
+    if (normalized == "error") {
+        return boost::log::trivial::error;
+    }
+    if (normalized == "fatal") {
+        return boost::log::trivial::fatal;
+    }
+
+    return std::nullopt;
+}
+
+const char* logLevelToString(const boost::log::trivial::severity_level level)
+{
+    switch (level) {
+        case boost::log::trivial::trace: return "trace";
+        case boost::log::trivial::debug: return "debug";
+        case boost::log::trivial::info: return "info";
+        case boost::log::trivial::warning: return "warning";
+        case boost::log::trivial::error: return "error";
+        case boost::log::trivial::fatal: return "fatal";
+        default: return "unknown";
+    }
+}
+
+std::optional<boost::log::trivial::severity_level> parseLogLevelFromArgs(int argc, char* argv[])
+{
+    for (int i = 1; i < argc; ++i) {
+        const std::string arg(argv[i]);
+
+        if (arg == "--log_level") {
+            if (i + 1 < argc) {
+                return parseLogLevel(argv[i + 1]);
+            }
+
+            OPENAUTO_LOG(warning) << "[OpenAuto] --log_level provided without a value.";
+            return std::nullopt;
+        }
+
+        const std::string prefix = "--log_level=";
+        if (arg.compare(0, prefix.size(), prefix) == 0) {
+            return parseLogLevel(arg.substr(prefix.size()));
+        }
+    }
+
+    return std::nullopt;
+}
+
+} // namespace
 
 void startUSBWorkers(boost::asio::io_service& ioService, libusb_context* usbContext, ThreadPool& threadPool)
 {
@@ -72,7 +147,9 @@ void startIOServiceWorkers(boost::asio::io_service& ioService, ThreadPool& threa
     threadPool.emplace_back(ioServiceWorker);
 }
 
-void configureLogging() {
+void configureLogging(int argc, char* argv[]) {
+    boost::log::core::get()->set_filter(boost::log::trivial::severity >= boost::log::trivial::warning);
+
     const std::string logIni = "openauto-logs.ini";
     std::ifstream logSettings(logIni);
     if (logSettings.good()) {
@@ -85,11 +162,18 @@ void configureLogging() {
             OPENAUTO_LOG(warning) << "[OpenAuto] " << logIni << " was provided but was not valid.";
         }
     }
+
+    const auto cliLogLevel = parseLogLevelFromArgs(argc, argv);
+    if (cliLogLevel.has_value()) {
+        boost::log::core::get()->set_filter(boost::log::trivial::severity >= cliLogLevel.value());
+        OPENAUTO_LOG(info) << "[OpenAuto] CLI log level override applied: "
+                           << logLevelToString(cliLogLevel.value());
+    }
 }
 
 int main(int argc, char* argv[])
 {
-    configureLogging();
+    configureLogging(argc, argv);
 
     libusb_context* usbContext;
     if(libusb_init(&usbContext) != 0)
@@ -229,8 +313,11 @@ int main(int argc, char* argv[])
         OPENAUTO_LOG(debug) << "[AutoApp] MainWindow Day.";
     });
 
-    mainWindow.showFullScreen();
-    mainWindow.setFixedSize(width, height);
+    const int windowedWidth = std::min(width, std::max(800, (width * 9) / 10));
+    const int windowedHeight = std::min(height, std::max(480, (height * 9) / 10));
+    mainWindow.resize(windowedWidth, windowedHeight);
+    mainWindow.move(std::max(0, (width - windowedWidth) / 2), std::max(0, (height - windowedHeight) / 2));
+    mainWindow.show();
     mainWindow.adjustSize();
 
     aasdk::usb::USBWrapper usbWrapper(usbContext);
@@ -243,6 +330,26 @@ int main(int argc, char* argv[])
     auto connectedAccessoriesEnumerator(std::make_shared<aasdk::usb::ConnectedAccessoriesEnumerator>(usbWrapper, ioService, queryChainFactory));
     auto app = std::make_shared<autoapp::App>(ioService, usbWrapper, tcpWrapper, androidAutoEntityFactory, std::move(usbHub), std::move(connectedAccessoriesEnumerator));
 
+#if 0
+    app->setConnectionStateHandler([&mainWindow, width, height](bool connected) {
+        autoapp::mqtt::publishConnectionState(connected);
+
+        QMetaObject::invokeMethod(&mainWindow, [&mainWindow, width, height, connected]() {
+            if (connected) {
+                mainWindow.showFullScreen();
+                OPENAUTO_LOG(info) << "[AutoApp] Switched main window to fullscreen after connection.";
+            } else {
+                const int windowedWidth = std::min(width, std::max(800, (width * 9) / 10));
+                const int windowedHeight = std::min(height, std::max(480, (height * 9) / 10));
+                mainWindow.showNormal();
+                mainWindow.resize(windowedWidth, windowedHeight);
+                mainWindow.move(std::max(0, (width - windowedWidth) / 2), std::max(0, (height - windowedHeight) / 2));
+                OPENAUTO_LOG(info) << "[AutoApp] Restored main window to normal mode after disconnect.";
+            }
+            mainWindow.adjustSize();
+        }, Qt::QueuedConnection);
+    });
+#endif
     QObject::connect(&connectdialog, &autoapp::ui::ConnectDialog::connectionSucceed, [&app](auto socket) {
         app->start(std::move(socket));
     });
@@ -260,6 +367,7 @@ int main(int argc, char* argv[])
 
     QObject::connect(&mainWindow, &autoapp::ui::MainWindow::TriggerAppStop, [&app]() {
         try {
+             OPENAUTO_LOG(debug) << "QObject::connect TriggerAppStop";
             if (std::ifstream("/tmp/android_device")) {
                 OPENAUTO_LOG(debug) << "[AutoApp] TriggerAppStop: Manual stop usb android auto.";
                 app->disableAutostartEntity = true;
