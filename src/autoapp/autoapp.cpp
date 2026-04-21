@@ -330,7 +330,7 @@ int main(int argc, char* argv[])
     auto connectedAccessoriesEnumerator(std::make_shared<aasdk::usb::ConnectedAccessoriesEnumerator>(usbWrapper, ioService, queryChainFactory));
     auto app = std::make_shared<autoapp::App>(ioService, usbWrapper, tcpWrapper, androidAutoEntityFactory, std::move(usbHub), std::move(connectedAccessoriesEnumerator));
 
-#if 0
+#if 1
     app->setConnectionStateHandler([&mainWindow, width, height](bool connected) {
         autoapp::mqtt::publishConnectionState(connected);
 
