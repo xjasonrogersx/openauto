@@ -141,6 +141,20 @@ openauto publishes audio stream events to its debug topic. The mixer subscribes 
 | `openauto/phone/debug` | openauto | `component="audio"`, `event="stream_started"\|"stream_stopped"`, `message` contains `channel=MEDIA_SINK_MEDIA_AUDIO\|MEDIA_SINK_GUIDANCE_AUDIO` |
 | `dab/state` | dab_tuner | `playing` / `stopped` |
 
+
+Example messages seen:
+```
+openauto/phone/debug {"component":"audio","event":"stream_started","message":"channel=MEDIA_SINK_GUIDANCE_AUDIO, session=0","source":"android_auto"}
+openauto/phone/debug {"component":"audio","event":"stream_stopped","message":"channel=MEDIA_SINK_GUIDANCE_AUDIO, session=0","source":"android_auto"}
+openauto/phone/debug {"component":"audio","event":"stream_stopped","message":"channel=MEDIA_SINK_MEDIA_AUDIO, session=0","source":"android_auto"}
+openauto/phone/debug {"component":"audio","event":"stream_started","message":"channel=MEDIA_SINK_MEDIA_AUDIO, session=1","source":"android_auto"}
+openauto/phone/debug {"component":"audio","event":"stream_stopped","message":"channel=MEDIA_SINK_MEDIA_AUDIO, session=1","source":"android_auto"}
+openauto/phone/debug {"component":"audio","event":"stream_started","message":"channel=MEDIA_SINK_GUIDANCE_AUDIO, session=1","source":"android_auto"}
+openauto/phone/debug {"component":"audio","event":"stream_stopped","message":"channel=MEDIA_SINK_GUIDANCE_AUDIO, session=1","source":"android_auto"}
+openauto/phone/debug {"component":"audio","event":"stream_started","message":"channel=MEDIA_SINK_GUIDANCE_AUDIO, session=2","source":"android_auto"}
+openauto/phone/debug {"component":"audio","event":"stream_stopped","message":"channel=MEDIA_SINK_GUIDANCE_AUDIO, session=2","source":"android_auto"}
+```
+
 #### Ducking rules
 
 | Condition | DAB volume |
@@ -171,4 +185,6 @@ Environment=OPENAUTO_TOPIC_PREFIX=openauto/phone
 WantedBy=multi-user.target
 ```
 
+
+## night_mode
 

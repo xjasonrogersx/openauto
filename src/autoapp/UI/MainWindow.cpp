@@ -64,7 +64,7 @@ MainWindow::MainWindow(configuration::IConfiguration::Pointer configuration, QWi
     this->configuration_ = configuration;
 
     // trigger files
-    this->nightModeEnabled = check_file_exist(this->nightModeFile);
+   
     this->devModeEnabled = check_file_exist(this->devModeFile);
     this->wifiButtonForce = check_file_exist(this->wifiButtonFile);
     this->cameraButtonForce = check_file_exist(this->cameraButtonFile);
@@ -440,17 +440,7 @@ MainWindow::MainWindow(configuration::IConfiguration::Pointer configuration, QWi
 
     // set bg's on startup
     MainWindow::updateBG();
-    if (!this->nightModeEnabled) {
-        ui_->pushButtonDay->hide();
-        ui_->pushButtonDay2->hide();
-        ui_->pushButtonNight->show();
-        ui_->pushButtonNight2->show();
-    } else {
-        ui_->pushButtonNight->hide();
-        ui_->pushButtonNight2->hide();
-        ui_->pushButtonDay->show();
-        ui_->pushButtonDay2->show();
-    }
+
 
     // use big clock in classic gui?
     if (configuration->showBigClock()) {
@@ -1034,52 +1024,7 @@ void f1x::openauto::autoapp::ui::MainWindow::updateBG()
         this->setStyleSheet("QMainWindow { background: url(:/wallpaper-firework.png); background-repeat: no-repeat; background-position: center; }");
         this->holidaybg = true;
     }
-    if (!this->nightModeEnabled) {
-        if (ui_->mediaWidget->isVisible() == true) {
-            if (this->wallpaperEQFileExists) {
-                this->setStyleSheet("QMainWindow { background: url(wallpaper-eq.png); background-repeat: no-repeat; background-position: center; }");
-            } else {
-                this->setStyleSheet("QMainWindow { background: url(:/black.png); background-repeat: repeat; background-position: center; }");
-            }
-        } else {
-            if (this->oldGUIStyle) {
-                if (this->wallpaperClassicDayFileExists) {
-                    this->setStyleSheet("QMainWindow { background: url(wallpaper-classic.png); background-repeat: no-repeat; background-position: center; }");
-                } else {
-                    this->setStyleSheet("QMainWindow { background: url(:/black.png); background-repeat: repeat; background-position: center; }");
-                }
-            } else {
-                if (this->wallpaperDayFileExists) {
-                    this->setStyleSheet("QMainWindow { background: url(wallpaper.png); background-repeat: no-repeat; background-position: center; }");
-                } else {
-                    this->setStyleSheet("QMainWindow { background: url(:/black.png); background-repeat: repeat; background-position: center; }");
-                }
-            }
-        }
-    } else {
-        if (ui_->mediaWidget->isVisible() == true) {
-            if (this->wallpaperEQFileExists) {
-                this->setStyleSheet("QMainWindow { background: url(wallpaper-eq.png); background-repeat: no-repeat; background-position: center; }");
-            } else {
-                this->setStyleSheet("QMainWindow { background: url(:/black.png); background-repeat: repeat; background-position: center; }");
-            }
-        } else {
-            if (this->oldGUIStyle) {
-                if (this->wallpaperClassicNightFileExists) {
-                    this->setStyleSheet( "QMainWindow { background: url(wallpaper-classic-night.png); background-repeat: no-repeat; background-position: center; }");
-                } else {
-                    this->setStyleSheet("QMainWindow { background: url(:/black.png); background-repeat: repeat; background-position: center; }");
-                }
-            } else {
-                if (this->wallpaperNightFileExists) {
-                    this->setStyleSheet("QMainWindow { background: url(wallpaper-night.png) stretch stretch; background-repeat: no-repeat; background-position: center; }");
-                } else {
-                    this->setStyleSheet("QMainWindow { background: url(:/black.png); background-repeat: repeat; background-position: center; }");
-                }
-            }
-        }
-    }
-    
+
     // Force a repaint to ensure background is properly updated
     this->update();
     this->repaint();
@@ -1941,20 +1886,7 @@ OPENAUTO_LOG(info) << "tmpChanged **** ";
         }
     }
 
-    // update day/night state
-    this->nightModeEnabled = check_file_exist("/tmp/night_mode_enabled");
 
-    if (this->nightModeEnabled) {
-        if (!this->DayNightModeState) {
-            this->DayNightModeState = true;
-            f1x::openauto::autoapp::ui::MainWindow::switchGuiToNight();
-        }
-    } else {
-        if (this->DayNightModeState) {
-            this->DayNightModeState = false;
-            f1x::openauto::autoapp::ui::MainWindow::switchGuiToDay();
-        }
-    }
 
     // camera stuff
     if (this->cameraButtonForce) {

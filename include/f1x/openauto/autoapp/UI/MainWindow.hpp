@@ -222,8 +222,6 @@ private:
     bool cameraButtonForce = false;
     bool brightnessButtonForce = false;
 
-    bool nightModeEnabled = false;
-    bool DayNightModeState = false;
 
     bool devModeEnabled = false;
 
