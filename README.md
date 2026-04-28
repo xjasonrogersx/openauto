@@ -49,7 +49,6 @@ OpenAuto and helper scripts use `/tmp` files as lightweight IPC/status flags.
 | `/tmp/return_value`   | `helpers/autoapp_helper`  | `src/autoapp/UI/SettingsWindow.cpp`| `#`-delimited system snapshot (volume, timer state text, DAC info).  |
 | `/tmp/temp_recent_list`   | `helpers/autoapp_helper`  | `src/autoapp/UI/MainWindow.cpp`, `src/autoapp/UI/ConnectDialog.cpp`| Recently seen hotspot client/IP list for wireless connection UI hints.   |
 | `/tmp/custombrightness`   | `helpers/crankshaft`  | `src/autoapp/UI/MainWindow.cpp`, `helpers/crankshaft`  | Current custom brightness level used by custom brightness command workflows. |
-| `/tmp/night_mode_enabled` | External day/night or sensor service scripts  | `src/autoapp/UI/MainWindow.cpp`, `src/autoapp/Service/Sensor/SensorService.cpp`, `helpers/crankshaft`  | Day/night mode state flag (night mode active when file exists).  |
 | `/tmp/blankscreen`| `helpers/crankshaft`  | `src/autoapp/UI/MainWindow.cpp`| Full UI hidden/display-off mode indicator.   |
 | `/tmp/screensaver`| `helpers/crankshaft`  | `src/autoapp/UI/MainWindow.cpp`| Screensaver/clock-only mode indicator.   |
 | `/tmp/blackscreen`| `helpers/crankshaft`  | `src/autoapp/UI/MainWindow.cpp`| Force black background mode for custom command workflows.|
@@ -187,4 +186,71 @@ WantedBy=multi-user.target
 
 
 ## night_mode
+
+OpenAuto now treats MQTT as the in-process source of truth for day/night mode. The `night_mode` topic is retained so OpenAuto can recover the current state after reconnect or restart without relying on `/tmp/night_mode_enabled`.
+
+### Topic
+
+- Topic: `openauto/phone/night_mode`
+- Retained: `true`
+- QoS: `1` recommended
+
+### Accepted payloads
+
+OpenAuto accepts either a small JSON payload or a simple text value.
+
+JSON examples:
+
+```json
+{"active":true}
+{"active":false}
+{"mode":"night"}
+{"mode":"day"}
+```
+
+Text examples:
+
+```text
+night
+day
+true
+false
+on
+off
+1
+0
+```
+
+### mosquitto_pub examples
+
+Set night mode on:
+
+```bash
+mosquitto_pub -h 127.0.0.1 -p 1883 -q 1 -r -t openauto/phone/night_mode -m '{"active":true}'
+```
+
+Set night mode off:
+
+```bash
+mosquitto_pub -h 127.0.0.1 -p 1883 -q 1 -r -t openauto/phone/night_mode -m '{"active":false}'
+```
+
+Equivalent plain-text commands:
+
+```bash
+mosquitto_pub -h 127.0.0.1 -p 1883 -q 1 -r -t openauto/phone/night_mode -m night
+mosquitto_pub -h 127.0.0.1 -p 1883 -q 1 -r -t openauto/phone/night_mode -m day
+```
+
+Inspect the currently retained state:
+
+```bash
+mosquitto_sub -h 127.0.0.1 -p 1883 -t openauto/phone/night_mode -C 1 -v
+```
+
+### Behavior
+
+- OpenAuto publishes retained state updates to `openauto/phone/night_mode` when the UI day/night buttons are used.
+- OpenAuto subscribes to the same retained topic and applies incoming state updates to its UI and Android Auto sensor state.
+- External integrations such as a headlight or sunset controller should publish the effective mode directly to the retained topic.
 

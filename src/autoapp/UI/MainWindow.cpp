@@ -103,14 +103,6 @@ MainWindow::MainWindow(configuration::IConfiguration::Pointer configuration, QWi
     connect(ui_->pushButtonReboot2, &QPushButton::clicked, this, &MainWindow::reboot);
     connect(ui_->pushButtonCancel, &QPushButton::clicked, this, &MainWindow::toggleExit);
     connect(ui_->pushButtonCancel2, &QPushButton::clicked, this, &MainWindow::toggleExit);
-    connect(ui_->pushButtonDay, &QPushButton::clicked, this, &MainWindow::TriggerScriptDay);
-    connect(ui_->pushButtonDay, &QPushButton::clicked, this, &MainWindow::switchGuiToDay);
-    connect(ui_->pushButtonDay2, &QPushButton::clicked, this, &MainWindow::TriggerScriptDay);
-    connect(ui_->pushButtonDay2, &QPushButton::clicked, this, &MainWindow::switchGuiToDay);
-    connect(ui_->pushButtonNight, &QPushButton::clicked, this, &MainWindow::TriggerScriptNight);
-    connect(ui_->pushButtonNight, &QPushButton::clicked, this, &MainWindow::switchGuiToNight);
-    connect(ui_->pushButtonNight2, &QPushButton::clicked, this, &MainWindow::TriggerScriptNight);
-    connect(ui_->pushButtonNight2, &QPushButton::clicked, this, &MainWindow::switchGuiToNight);
     connect(ui_->pushButtonBrightness, &QPushButton::clicked, this, &MainWindow::showBrightnessSlider);
     connect(ui_->pushButtonBrightness2, &QPushButton::clicked, this, &MainWindow::showBrightnessSlider);
     connect(ui_->pushButtonVolume, &QPushButton::clicked, this, &MainWindow::showVolumeSlider);
@@ -827,33 +819,6 @@ void f1x::openauto::autoapp::ui::MainWindow::updateAlpha()
     }
 }
 
-void f1x::openauto::autoapp::ui::MainWindow::switchGuiToNight()
-{
-    //MainWindow::on_pushButtonVolume_clicked();
-    f1x::openauto::autoapp::ui::MainWindow::updateBG();
-    ui_->pushButtonDay->show();
-    ui_->pushButtonDay2->show();
-    ui_->pushButtonNight->hide();
-    ui_->pushButtonNight2->hide();
-    ui_->BrightnessSliderControl->hide();
-    if (ui_->mediaWidget->isVisible() == true) {
-        ui_->VolumeSliderControl->hide();
-    }
-}
-
-void f1x::openauto::autoapp::ui::MainWindow::switchGuiToDay()
-{
-    //MainWindow::on_pushButtonVolume_clicked();
-    f1x::openauto::autoapp::ui::MainWindow::updateBG();
-    ui_->pushButtonNight->show();
-    ui_->pushButtonNight2->show();
-    ui_->pushButtonDay->hide();
-    ui_->pushButtonDay2->hide();
-    ui_->BrightnessSliderControl->hide();
-    if (ui_->mediaWidget->isVisible() == true) {
-        ui_->VolumeSliderControl->hide();
-    }
-}
 
 void f1x::openauto::autoapp::ui::MainWindow::cameraControlHide()
 {

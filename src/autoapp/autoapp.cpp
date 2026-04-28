@@ -19,6 +19,7 @@
 #include <thread>
 #include <algorithm>
 #include <cctype>
+#include <fstream>
 #include <optional>
 #include <QApplication>
 #include <QScreen>
@@ -304,12 +305,12 @@ int main(int argc, char* argv[])
     });
 
     QObject::connect(&mainWindow, &autoapp::ui::MainWindow::TriggerScriptNight, [&qApplication]() {
-        system("/opt/crankshaft/service_daynight.sh app night");
+        autoapp::mqtt::publishNightModeState(true);
         OPENAUTO_LOG(debug) << "[AutoApp] MainWindow Night.";
     });
 
     QObject::connect(&mainWindow, &autoapp::ui::MainWindow::TriggerScriptDay, [&qApplication]() {
-        system("/opt/crankshaft/service_daynight.sh app day");
+        autoapp::mqtt::publishNightModeState(false);
         OPENAUTO_LOG(debug) << "[AutoApp] MainWindow Day.";
     });
 
@@ -325,6 +326,12 @@ int main(int argc, char* argv[])
     aasdk::usb::AccessoryModeQueryChainFactory queryChainFactory(usbWrapper, ioService, queryFactory);
     autoapp::service::ServiceFactory serviceFactory(ioService, configuration);
     autoapp::service::AndroidAutoEntityFactory androidAutoEntityFactory(ioService, configuration, serviceFactory);
+    autoapp::mqtt::NightModeStateSubscriber nightModeSubscriber([&mainWindow](bool active) {
+        QMetaObject::invokeMethod(&mainWindow, [&mainWindow, active]() {
+            
+        }, Qt::QueuedConnection);
+    });
+    nightModeSubscriber.start();
 
     auto usbHub(std::make_shared<aasdk::usb::USBHub>(usbWrapper, ioService, queryChainFactory));
     auto connectedAccessoriesEnumerator(std::make_shared<aasdk::usb::ConnectedAccessoriesEnumerator>(usbWrapper, ioService, queryChainFactory));
@@ -410,6 +417,7 @@ int main(int argc, char* argv[])
     app->waitForUSBDevice();
 
     auto result = qApplication.exec();
+    nightModeSubscriber.stop();
 
     std::for_each(threadPool.begin(), threadPool.end(), std::bind(&std::thread::join, std::placeholders::_1));
 

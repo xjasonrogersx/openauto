@@ -111,8 +111,7 @@ private slots:
     void on_pushButtonBrightness2_clicked();
     void on_pushButtonVolume_clicked();
     void on_pushButtonVolume2_clicked();
-    void switchGuiToDay();
-    void switchGuiToNight();
+ 
     void showTime();
     void cameraControlShow();
     void cameraControlHide();
@@ -180,7 +179,6 @@ private:
     QString bversion;
     QString bdate;
 
-    char nightModeFile[32] = "/tmp/night_mode_enabled";
     char devModeFile[32] = "/tmp/dev_mode_enabled";
     char wifiButtonFile[32] = "/etc/button_wifi_visible";
     char cameraButtonFile[32] = "/etc/button_camera_visible";
