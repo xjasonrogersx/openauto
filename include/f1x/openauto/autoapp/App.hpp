@@ -24,6 +24,7 @@
 #include <aasdk/USB/USBWrapper.hpp>
 #include <aasdk/TCP/ITCPWrapper.hpp>
 #include <aasdk/TCP/ITCPEndpoint.hpp>
+#include <aap_protobuf/service/media/sink/message/KeyCode.pb.h>
 #include <f1x/openauto/autoapp/Service/IAndroidAutoEntityEventHandler.hpp>
 #include <f1x/openauto/autoapp/Service/IAndroidAutoEntityFactory.hpp>
 
@@ -47,6 +48,7 @@ public:
     void stop();
     void pause();
     void resume();
+    void sendAndroidMediaButton(aap_protobuf::service::media::sink::message::KeyCode keyCode);
     void onAndroidAutoQuit() override;
     void setConnectionStateHandler(std::function<void(bool)> handler);
     bool disableAutostartEntity = false;

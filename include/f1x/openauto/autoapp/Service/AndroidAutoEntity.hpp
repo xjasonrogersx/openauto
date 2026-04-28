@@ -32,6 +32,7 @@
 #include <aap_protobuf/service/control/message/AudioFocusRequestType.pb.h>
 #include <aap_protobuf/service/control/message/AudioFocusStateType.pb.h>
 #include <aap_protobuf/service/control/message/NavFocusType.pb.h>
+#include <aap_protobuf/service/media/sink/message/KeyCode.pb.h>
 
 namespace f1x
 {
@@ -58,6 +59,7 @@ public:
     void stop() override;
     void pause() override;
     void resume() override;
+    void sendButtonPress(aap_protobuf::service::media::sink::message::KeyCode keyCode) override;
     // TODO: on channel open request... on channel close...  on navigation focus, on voice session notification, on user switch, on call availability, on service disc update, on battery status, on car connected devices
     void onVersionResponse(uint16_t majorCode, uint16_t minorCode, aap_protobuf::shared::MessageStatus status) override;
     void onHandshake(const aasdk::common::DataConstBuffer& payload) override;

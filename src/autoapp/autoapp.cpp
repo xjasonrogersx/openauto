@@ -19,6 +19,7 @@
 #include <thread>
 #include <algorithm>
 #include <cctype>
+#include <string>
 #include <fstream>
 #include <optional>
 #include <QApplication>
@@ -31,6 +32,7 @@
 #include <aasdk/USB/AccessoryModeQueryChainFactory.hpp>
 #include <aasdk/USB/AccessoryModeQueryFactory.hpp>
 #include <aasdk/TCP/TCPWrapper.hpp>
+#include <aap_protobuf/service/media/sink/message/KeyCode.pb.h>
 #include <boost/log/core.hpp>
 #include <boost/log/expressions.hpp>
 #include <boost/log/utility/setup.hpp>
@@ -337,6 +339,41 @@ int main(int argc, char* argv[])
     auto connectedAccessoriesEnumerator(std::make_shared<aasdk::usb::ConnectedAccessoriesEnumerator>(usbWrapper, ioService, queryChainFactory));
     auto app = std::make_shared<autoapp::App>(ioService, usbWrapper, tcpWrapper, androidAutoEntityFactory, std::move(usbHub), std::move(connectedAccessoriesEnumerator));
 
+    autoapp::mqtt::MediaPlayerCommandSubscriber mediaPlayerCommandSubscriber([&app](const std::string &command) {
+        if (command == "play") {
+            app->sendAndroidMediaButton(aap_protobuf::service::media::sink::message::KeyCode::KEYCODE_MEDIA_PLAY);
+            return;
+        }
+
+        if (command == "stop") {
+            app->sendAndroidMediaButton(aap_protobuf::service::media::sink::message::KeyCode::KEYCODE_MEDIA_PAUSE);
+            return;
+        }
+
+        if (command == "pause") {
+            app->sendAndroidMediaButton(aap_protobuf::service::media::sink::message::KeyCode::KEYCODE_MEDIA_PAUSE);
+            return;
+        }
+
+        if (command == "next") {
+            app->sendAndroidMediaButton(aap_protobuf::service::media::sink::message::KeyCode::KEYCODE_MEDIA_NEXT);
+            return;
+        }
+
+        if (command == "prev") {
+            app->sendAndroidMediaButton(aap_protobuf::service::media::sink::message::KeyCode::KEYCODE_MEDIA_PREVIOUS);
+            return;
+        }
+
+        if (command == "toggle") {
+            app->sendAndroidMediaButton(aap_protobuf::service::media::sink::message::KeyCode::KEYCODE_MEDIA_PLAY_PAUSE);
+            return;
+        }
+
+        OPENAUTO_LOG(warning) << "[AutoApp] Unknown media command received: " << command;
+    });
+    mediaPlayerCommandSubscriber.start();
+
 #if 1
     app->setConnectionStateHandler([&mainWindow, width, height](bool connected) {
         autoapp::mqtt::publishConnectionState(connected);
@@ -417,6 +454,7 @@ int main(int argc, char* argv[])
     app->waitForUSBDevice();
 
     auto result = qApplication.exec();
+    mediaPlayerCommandSubscriber.stop();
     nightModeSubscriber.stop();
 
     std::for_each(threadPool.begin(), threadPool.end(), std::bind(&std::thread::join, std::placeholders::_1));

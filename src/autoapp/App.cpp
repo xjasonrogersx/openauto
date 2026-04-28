@@ -221,6 +221,17 @@ namespace f1x::openauto::autoapp {
     });
   }
 
+  void App::sendAndroidMediaButton(aap_protobuf::service::media::sink::message::KeyCode keyCode) {
+    strand_.dispatch([this, self = this->shared_from_this(), keyCode]() {
+      if (androidAutoEntity_ == nullptr) {
+        OPENAUTO_LOG(warning) << "[App] Ignoring media key, Android Auto is not connected.";
+        return;
+      }
+
+      androidAutoEntity_->sendButtonPress(keyCode);
+    });
+  }
+
   void App::onAndroidAutoQuit() {
     strand_.dispatch([this, self = this->shared_from_this()]() {
       OPENAUTO_LOG(info) << "[App] onAndroidAutoQuit()";

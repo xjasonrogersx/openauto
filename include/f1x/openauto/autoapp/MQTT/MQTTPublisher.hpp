@@ -18,6 +18,7 @@ class Publisher final {
                             std::optional<uint32_t> timeRemainingSeconds,
                             std::optional<bool> criticalBattery);
   void publishNightModeState(bool active);
+  void publishMediaPlayerState(bool playing, bool paused, bool stopped);
   void publishDebugMessage(const std::string &component,
                            const std::string &event,
                            const std::string &message);
@@ -42,6 +43,7 @@ void publishBatteryStatus(uint32_t batteryLevel,
                           std::optional<uint32_t> timeRemainingSeconds,
                           std::optional<bool> criticalBattery);
 void publishNightModeState(bool active);
+void publishMediaPlayerState(bool playing, bool paused, bool stopped);
 void publishDebugMessage(const std::string &component,
                          const std::string &event,
                          const std::string &message);
@@ -52,6 +54,21 @@ class NightModeStateSubscriber final {
 
   explicit NightModeStateSubscriber(Handler handler);
   ~NightModeStateSubscriber();
+
+  void start();
+  void stop();
+
+ private:
+  class Impl;
+  std::unique_ptr<Impl> impl_;
+};
+
+class MediaPlayerCommandSubscriber final {
+ public:
+  using Handler = std::function<void(const std::string &)>;
+
+  explicit MediaPlayerCommandSubscriber(Handler handler);
+  ~MediaPlayerCommandSubscriber();
 
   void start();
   void stop();
