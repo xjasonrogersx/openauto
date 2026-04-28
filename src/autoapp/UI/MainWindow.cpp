@@ -71,19 +71,8 @@ MainWindow::MainWindow(configuration::IConfiguration::Pointer configuration, QWi
     this->brightnessButtonForce = check_file_exist(this->brightnessButtonFile);
     this->systemDebugmode = check_file_exist(this->debugModeFile);
     this->lightsensor = check_file_exist(this->lsFile);
-    this->c1ButtonForce = check_file_exist(this->custom_button_file_c1);
-    this->c2ButtonForce = check_file_exist(this->custom_button_file_c2);
-    this->c3ButtonForce = check_file_exist(this->custom_button_file_c3);
-    this->c4ButtonForce = check_file_exist(this->custom_button_file_c4);
-    this->c5ButtonForce = check_file_exist(this->custom_button_file_c5);
-    this->c6ButtonForce = check_file_exist(this->custom_button_file_c6);
+   
 
-    // wallpaper stuff
-    this->wallpaperDayFileExists = check_file_exist("wallpaper.png");
-    this->wallpaperNightFileExists = check_file_exist("wallpaper-night.png");
-    this->wallpaperClassicDayFileExists = check_file_exist("wallpaper-classic.png");
-    this->wallpaperClassicNightFileExists = check_file_exist("wallpaper-classic-night.png");
-    this->wallpaperEQFileExists = check_file_exist("wallpaper-eq.png");
 
     ui_->setupUi(this);
     
@@ -260,135 +249,11 @@ MainWindow::MainWindow(configuration::IConfiguration::Pointer configuration, QWi
         ui_->pushButtonNoWiFiDevice2->show();
     }
 
-    // set custom buttons if file enabled by trigger file
-    if (!this->c1ButtonForce) {
-        ui_->pushButton_c1->hide();
-    } else {
-        // read button config 1
-        QFile paramFile(this->custom_button_file_c1);
-        paramFile.open(QIODevice::ReadOnly);
-        QTextStream data(&paramFile);
-        QStringList params = data.readAll().split("#");
-        paramFile.close();
-        ui_->pushButton_c1->setText(params[0].simplified());
-        this->custom_button_command_c1 = params[1].simplified();
-        if (params[2] != "") {
-            this->custom_button_color_c1 = params[2].simplified();
-        }
-        connect(ui_->pushButton_c1, &QPushButton::clicked, this, &MainWindow::customButtonPressed1);
-    }
-
-    if (!this->c2ButtonForce) {
-        ui_->pushButton_c2->hide();
-    } else {
-        // read button config 2
-        QFile paramFile(this->custom_button_file_c2);
-        paramFile.open(QIODevice::ReadOnly);
-        QTextStream data(&paramFile);
-        QStringList params = data.readAll().split("#");
-        paramFile.close();
-        ui_->pushButton_c2->setText(params[0].simplified());
-        this->custom_button_command_c2 = params[1].simplified();
-        if (params[2] != "") {
-            this->custom_button_color_c2 = params[2].simplified();
-        }
-        connect(ui_->pushButton_c2, &QPushButton::clicked, this, &MainWindow::customButtonPressed2);
-    }
-
-    if (!this->c3ButtonForce) {
-        ui_->pushButton_c3->hide();
-    } else {
-        // read button config 3
-        QFile paramFile(this->custom_button_file_c3);
-        paramFile.open(QIODevice::ReadOnly);
-        QTextStream data(&paramFile);
-        QStringList params = data.readAll().split("#");
-        paramFile.close();
-        ui_->pushButton_c3->setText(params[0].simplified());
-        this->custom_button_command_c3 = params[1].simplified();
-        if (params[2] != "") {
-            this->custom_button_color_c3 = params[2].simplified();
-        }
-        connect(ui_->pushButton_c3, &QPushButton::clicked, this, &MainWindow::customButtonPressed3);
-    }
-
-    if (!this->c4ButtonForce) {
-        ui_->pushButton_c4->hide();
-    } else {
-        // read button config 4
-        QFile paramFile(this->custom_button_file_c4);
-        paramFile.open(QIODevice::ReadOnly);
-        QTextStream data(&paramFile);
-        QStringList params = data.readAll().split("#");
-        paramFile.close();
-        ui_->pushButton_c4->setText(params[0].simplified());
-        this->custom_button_command_c4 = params[1].simplified();
-        if (params[2] != "") {
-            this->custom_button_color_c4 = params[2].simplified();
-        }
-        connect(ui_->pushButton_c4, &QPushButton::clicked, this, &MainWindow::customButtonPressed4);
-    }
-
-    if (!this->c5ButtonForce) {
-        ui_->pushButton_c5->hide();
-    } else {
-        // read button config 5
-        QFile paramFile(this->custom_button_file_c5);
-        paramFile.open(QIODevice::ReadOnly);
-        QTextStream data(&paramFile);
-        QStringList params = data.readAll().split("#");
-        paramFile.close();
-        ui_->pushButton_c5->setText(params[0].simplified());
-        this->custom_button_command_c5 = params[1].simplified();
-        if (params[2] != "") {
-            this->custom_button_color_c5 = params[2].simplified();
-        }
-        connect(ui_->pushButton_c5, &QPushButton::clicked, this, &MainWindow::customButtonPressed5);
-    }
-
-    if (!this->c6ButtonForce) {
-        ui_->pushButton_c6->hide();
-    } else {
-        // read button config 6
-        QFile paramFile(this->custom_button_file_c6);
-        paramFile.open(QIODevice::ReadOnly);
-        QTextStream data(&paramFile);
-        QStringList params = data.readAll().split("#");
-        paramFile.close();
-        ui_->pushButton_c6->setText(params[0].simplified());
-        this->custom_button_command_c6 = params[1].simplified();
-        if (params[2] != "") {
-            this->custom_button_color_c6 = params[2].simplified();
-        }
-        connect(ui_->pushButton_c6, &QPushButton::clicked, this, &MainWindow::customButtonPressed6);
-    }
-
     // as default hide camera controls
     ui_->cameraWidget->hide();
     ui_->pushButtonRecordActive->hide();
 
-    // fill gui with dummys if needed
-    if (this->c1ButtonForce || this->c2ButtonForce || this->c3ButtonForce || this->c4ButtonForce || this->c5ButtonForce || this->c6ButtonForce) {
-        if (!this->c1ButtonForce && !this->c2ButtonForce) {
-            ui_->pushButtonDummy1->show();
-        } else {
-            ui_->pushButtonDummy1->hide();
-        }
-        if (!this->c3ButtonForce && !this->c4ButtonForce) {
-            ui_->pushButtonDummy2->show();
-        } else {
-            ui_->pushButtonDummy2->hide();
-        }
-        if (!this->c5ButtonForce && !this->c6ButtonForce) {
-            ui_->pushButtonDummy3->show();
-        } else {
-            ui_->pushButtonDummy3->hide();
-        }
-    } else {
-        ui_->pushButtonDummy1->hide();
-        ui_->pushButtonDummy2->hide();
-        ui_->pushButtonDummy3->hide();
-    }
+   
 
     // show dev labels if dev mode activated
     if (!this->devModeEnabled) {
@@ -430,8 +295,6 @@ MainWindow::MainWindow(configuration::IConfiguration::Pointer configuration, QWi
         ui_->menuWidget->hide();
     }
 
-    // set bg's on startup
-    MainWindow::updateBG();
 
 
     // use big clock in classic gui?
@@ -859,11 +722,6 @@ void f1x::openauto::autoapp::ui::MainWindow::cameraControlShow()
 
 void f1x::openauto::autoapp::ui::MainWindow::playerShow()
 {
-    if (this->wallpaperEQFileExists) {
-        this->setStyleSheet("QMainWindow { background: url(wallpaper-eq.png); background-repeat: no-repeat; background-position: center; }");
-    } else {
-        this->setStyleSheet("QMainWindow { background: url(:/black.png); background-repeat: no-repeat; background-position: center; }");
-    }
 
     if (!this->oldGUIStyle) {
         ui_->menuWidget->hide();
@@ -906,7 +764,7 @@ void f1x::openauto::autoapp::ui::MainWindow::playerHide()
     if (configuration_->showNetworkinfo()) {
         ui_->networkInfo->hide();
     }
-    f1x::openauto::autoapp::ui::MainWindow::updateBG();
+
     f1x::openauto::autoapp::ui::MainWindow::tmpChanged();
 }
 
@@ -968,7 +826,7 @@ void f1x::openauto::autoapp::ui::MainWindow::toggleGUI()
         }
     }
     
-    f1x::openauto::autoapp::ui::MainWindow::updateBG();
+  
     f1x::openauto::autoapp::ui::MainWindow::tmpChanged();
     
     // Force repaint after UI changes
@@ -976,24 +834,6 @@ void f1x::openauto::autoapp::ui::MainWindow::toggleGUI()
     this->repaint();
 }
 
-void f1x::openauto::autoapp::ui::MainWindow::updateBG()
-{
-    // Clear any existing stylesheet before applying new one
-    this->setStyleSheet("");
-    
-    if (this->date_text == "12/24") {
-        this->setStyleSheet("QMainWindow { background: url(:/wallpaper-christmas.png); background-repeat: no-repeat; background-position: center; }");
-        this->holidaybg = true;
-    }
-    else if (this->date_text == "12/31") {
-        this->setStyleSheet("QMainWindow { background: url(:/wallpaper-firework.png); background-repeat: no-repeat; background-position: center; }");
-        this->holidaybg = true;
-    }
-
-    // Force a repaint to ensure background is properly updated
-    this->update();
-    this->repaint();
-}
 
 void f1x::openauto::autoapp::ui::MainWindow::createDebuglog()
 {
@@ -1031,14 +871,6 @@ void f1x::openauto::autoapp::ui::MainWindow::showTime()
     ui_->bigClock->setText(time_text);
     ui_->bigClock2->setText(time_text);
 
-    if (!this->holidaybg) {
-        if (this->date_text == "12/24") {
-            MainWindow::updateBG();
-        }
-        else if (this->date_text == "12/31") {
-            MainWindow::updateBG();
-        }
-    }
 
     // check connected devices
     if (localDevice->isValid()) {
@@ -1728,23 +1560,11 @@ OPENAUTO_LOG(info) << "tmpChanged **** ";
             ui_->clockOnlyWidget->hide();
             toggleGUI();
             toggleGUI();
-            updateBG();
+        
         }
     }
 
-    // check if custom command needs black background
-    if (std::ifstream("/tmp/blackscreen")) {
-        if (ui_->centralWidget->isVisible() == true) {
-            ui_->centralWidget->hide();
-            this->setStyleSheet("QMainWindow {background-color: rgb(0,0,0);}");
-            this->background_set = false;
-        }
-    } else {
-        if (this->background_set == false) {
-            f1x::openauto::autoapp::ui::MainWindow::updateBG();
-            this->background_set = true;
-        }
-    }
+   
 
     // check if phone is conencted to usb
     if (std::ifstream("/tmp/android_device")) {

@@ -254,3 +254,5 @@ mosquitto_sub -h 127.0.0.1 -p 1883 -t openauto/phone/night_mode -C 1 -v
 - OpenAuto subscribes to the same retained topic and applies incoming state updates to its UI and Android Auto sensor state.
 - External integrations such as a headlight or sunset controller should publish the effective mode directly to the retained topic.
 
+## Media controls
+
