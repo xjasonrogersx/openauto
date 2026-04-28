@@ -263,9 +263,6 @@ OpenAuto supports MQTT-based media controls so external integrations (for exampl
 - Command topic: `openauto/phone/media_player/command`
 - Command retained: `false` (required to avoid stale command replay)
 - Command QoS: `1` recommended
-- State topic: `openauto/phone/media_player/state`
-- State retained: `true`
-- State QoS: `1` recommended
 
 ### Command payloads
 
@@ -302,23 +299,5 @@ Optional navigation commands:
 ```bash
 mosquitto_pub -h 127.0.0.1 -p 1883 -q 1 -t openauto/phone/media_player/command -m next
 mosquitto_pub -h 127.0.0.1 -p 1883 -q 1 -t openauto/phone/media_player/command -m prev
-```
-
-### Player state payload
-
-OpenAuto publishes retained player state whenever the local `QMediaPlayer` state changes.
-
-Note: this state topic does not reflect Android app playback telemetry.
-
-Example payload:
-
-```json
-{"playing":true,"paused":false,"stopped":false,"source":"android_auto"}
-```
-
-Read the current retained state:
-
-```bash
-mosquitto_sub -h 127.0.0.1 -p 1883 -t openauto/phone/media_player/state -C 1 -v
 ```
 

@@ -351,15 +351,6 @@ void Publisher::publishNightModeState(bool active) {
   publish("night_mode", payload.str(), true);
 }
 
-void Publisher::publishMediaPlayerState(bool playing, bool paused, bool stopped) {
-  std::ostringstream payload;
-  payload << "{\"playing\":" << (playing ? "true" : "false")
-          << ",\"paused\":" << (paused ? "true" : "false")
-          << ",\"stopped\":" << (stopped ? "true" : "false")
-          << ",\"source\":\"android_auto\"}";
-  publish("media_player/state", payload.str(), true);
-}
-
 bool currentNightModeState() {
   return g_nightModeState.load(std::memory_order_acquire);
 }
@@ -424,10 +415,6 @@ void publishBatteryStatus(uint32_t batteryLevel,
 
 void publishNightModeState(bool active) {
   Publisher::instance().publishNightModeState(active);
-}
-
-void publishMediaPlayerState(bool playing, bool paused, bool stopped) {
-  Publisher::instance().publishMediaPlayerState(playing, paused, stopped);
 }
 
 void publishDebugMessage(const std::string &component,

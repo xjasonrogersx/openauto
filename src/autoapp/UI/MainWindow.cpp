@@ -37,7 +37,6 @@
 #include <cstdio>
 #include <unistd.h>
 #include <f1x/openauto/Common/Log.hpp>
-#include <f1x/openauto/autoapp/MQTT/MQTTPublisher.hpp>
 
 namespace f1x
 {
@@ -1400,11 +1399,6 @@ void f1x::openauto::autoapp::ui::MainWindow::on_StateChanged(QMediaPlayer::State
     } else {
         std::ofstream("/tmp/media_playing");
     }
-
-    const bool playing = state == QMediaPlayer::PlayingState;
-    const bool paused = state == QMediaPlayer::PausedState;
-    const bool stopped = state == QMediaPlayer::StoppedState;
-    ::f1x::openauto::autoapp::mqtt::publishMediaPlayerState(playing, paused, stopped);
 }
 
 
