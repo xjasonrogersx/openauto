@@ -61,3 +61,114 @@ Notes:
 
 - Some `/tmp` files are produced by scripts/services outside this repo (for example network/day-night integrations installed on target systems).
 - Most files are treated as presence/absence flags; a smaller subset carry text payloads (`android_device`, `return_value`, audio device lists, timezone list).
+
+
+## Audio handling
+
+Android Auto sends up to three distinct PCM audio streams over separate aasdk channels, each handled by its own service instance:
+
+| Stream | Service Class | Channel ID | Format |
+|---|---|---|---|
+| **Media/Music** | `MediaAudioService` | `MEDIA_SINK_MEDIA_AUDIO` | Stereo, 16-bit, 48000 Hz |
+| **Guidance (nav)** | `GuidanceAudioService` | `MEDIA_SINK_GUIDANCE_AUDIO` | Mono, 16-bit, 16000 Hz |
+| **System audio** | `SystemAudioService` | `MEDIA_SINK_SYSTEM_AUDIO` | Mono, 16-bit, 16000 Hz |
+
+Telephony audio is present in code but commented out — suspected to be handled via Bluetooth in practice.
+
+### Data path
+
+```
+Android Phone (USB)
+    │  PCM over aasdk messenger channels
+    ▼
+AudioMediaSinkService  (one instance per stream)
+    │  onMediaWithTimestampIndication()
+    │  → audioOutput_->write(timestamp, buffer)
+    ▼
+IAudioOutput  (RtAudioOutput or QtAudioOutput)
+    │  writes raw PCM into SequentialBuffer (QIODevice ring buffer)
+    ▼
+RtAudio callback: audioBufferReadHandler()
+    │  pulls frames from SequentialBuffer into outputBuffer
+    ▼
+RtAudio backend
+    │  prefers LINUX_PULSE (PulseAudio) if compiled in, else default (ALSA)
+    ▼
+ALSA / PulseAudio  →  hardware DAC
+```
+
+### Key details
+
+- **Backend selection**: `RtAudioOutput` prefers PulseAudio (`LINUX_PULSE`) if compiled in, otherwise falls back to the RtAudio default (ALSA on Pi). Configurable via `AudioOutputBackendType` — can be switched to the Qt audio backend (`QtAudioOutput`) in settings.
+- **Stream options**: `RTAUDIO_MINIMIZE_LATENCY | RTAUDIO_SCHEDULE_REALTIME` — real-time scheduling priority is requested for low latency.
+- **Buffer sizes**: 1024 frames for 16 kHz streams, 2048 frames for the 48 kHz media stream (tuned to match observed AA packet sizes).
+- **Flow control**: After each PCM packet is consumed, `AudioMediaSinkService` sends a `MediaAck` (ack=1) back to the phone, gating the phone's send rate.
+
+### PipeWire on Raspberry Pi OS Bookworm
+
+Bookworm uses **PipeWire** as the audio server (not PulseAudio). `RtAudioOutput` still selects the `LINUX_PULSE` backend when compiled in — it connects cleanly to PipeWire's PulseAudio-compatible socket. If only bare PipeWire is installed (no `pipewire-pulse`), RtAudio falls back to ALSA via PipeWire's ALSA emulation.
+
+The `pactl` volume calls in `autoapp_helper` require `pipewire-pulse` to be installed. Without it, volume control from the UI is silently broken. Install with:
+
+```bash
+sudo apt install pipewire-pulse
+systemctl --user enable --now pipewire-pulse
+```
+
+### DAB Tuner audio ducking
+
+Android handles audio focus between its own apps (i.e. music automatically ducks for navigation guidance). However, an external source such as a DAB radio tuner is invisible to Android — the head unit must manage ducking itself.
+
+#### Architecture
+
+Each process publishes its state to MQTT. A dedicated `audio-mixer` process subscribes and adjusts PipeWire volumes using `wpctl`:
+
+```
+openauto  ──MQTT──→  audio-mixer  ←──MQTT──  dab_tuner
+                          │
+                     wpctl set-volume
+                    (per sink-input)
+```
+
+This keeps openauto and dab_tuner decoupled from each other. Ducking logic lives in one place and is easy to tune.
+
+#### MQTT topics
+
+openauto publishes audio stream events to its debug topic. The mixer subscribes to:
+
+| Topic | Publisher | Relevant payload fields |
+|---|---|---|
+| `openauto/phone/debug` | openauto | `component="audio"`, `event="stream_started"\|"stream_stopped"`, `message` contains `channel=MEDIA_SINK_MEDIA_AUDIO\|MEDIA_SINK_GUIDANCE_AUDIO` |
+| `dab/state` | dab_tuner | `playing` / `stopped` |
+
+#### Ducking rules
+
+| Condition | DAB volume |
+|---|---|
+| AA media stream active | 0% (mute) |
+| AA guidance stream active (no media) | 20% (duck) |
+| AA guidance stream active (media also active) | 0% (stay muted) |
+| Neither AA stream active | 100% |
+
+#### Mixer script
+
+See `src/audio_mixer/audio_mixer.py`. Run as a systemd user service alongside openauto and dab_tuner.
+
+```ini
+# /etc/systemd/system/audio-mixer.service
+[Unit]
+Description=Audio Mixer / Ducking Service
+After=network.target pipewire.service
+
+[Service]
+ExecStart=/usr/bin/python3 /home/pi/openauto/src/audio_mixer/audio_mixer.py
+Restart=on-failure
+Environment=MQTT_HOST=127.0.0.1
+Environment=DAB_SINK_NAME=ffmpeg
+Environment=OPENAUTO_TOPIC_PREFIX=openauto/phone
+
+[Install]
+WantedBy=multi-user.target
+```
+
+

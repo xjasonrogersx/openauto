@@ -348,7 +348,7 @@ namespace f1x {
             OPENAUTO_LOG(debug) << "[VideoMediaSinkService] Channel Id: "
                                << aasdk::messenger::channelIdToString(channel_->getId()) << ", session: " << session_;
 
-            this->maybePublishVideoTelemetry(timestamp, buffer.size);
+            // this->maybePublishVideoTelemetry(timestamp, buffer.size);
 
             videoOutput_->write(timestamp, buffer);
 

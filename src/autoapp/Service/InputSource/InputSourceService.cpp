@@ -170,7 +170,7 @@ namespace f1x {
           }
 
           void InputSourceService::onTouchEvent(const projection::TouchEvent &event) {
-            OPENAUTO_LOG(debug) << "[InputSourceService] onTouchEvent: action=" << event.type 
+            OPENAUTO_LOG(info) << "[InputSourceService] onTouchEvent: action=" << event.type 
                                 << " pointerCount=" << event.pointers.size() 
                                 << " actionIndex=" << event.actionIndex;
             
