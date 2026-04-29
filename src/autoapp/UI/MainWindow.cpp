@@ -50,19 +50,15 @@ MainWindow::MainWindow(configuration::IConfiguration::Pointer configuration,
     : QMainWindow(parent),
       ui_(new Ui::MainWindow),
       localDevice(new QBluetoothLocalDevice) {
-  // Set background image for the main window, fallback to black if missing.
-  const QString backgroundImage = "/home/pi/openauto/images/1777450215290.png";
-  if (QFileInfo::exists(backgroundImage)) {
-    this->setStyleSheet(QString("QMainWindow {"
-                                "background-color: rgb(0,0,0);"
-                                "background-image: url(%1);"
-                                "background-position: center;"
-                                "background-repeat: no-repeat;"
-                                "}")
-                            .arg(backgroundImage));
-  } else {
-    this->setStyleSheet("QMainWindow {background-color: rgb(0,0,0);}");
-  }
+  // Background image is embedded into the binary via Qt resources.
+  const QString backgroundImage = ":/1777450215290.png";
+  this->setStyleSheet(QString("QMainWindow {"
+                              "background-color: rgb(0,0,0);"
+                              "background-image: url(%1);"
+                              "background-position: center;"
+                              "background-repeat: no-repeat;"
+                              "}")
+                          .arg(backgroundImage));
 
   // Set default font and size
   int id = QFontDatabase::addApplicationFont(":/Roboto-Regular.ttf");
@@ -99,16 +95,6 @@ MainWindow::MainWindow(configuration::IConfiguration::Pointer configuration,
     if (ui_->btDevice->isVisible() == true) {
       ui_->btDevice->hide();
     }
-  }
-
-  // hide wifi if not forced
-  if (!this->wifiButtonForce &&
-      !std::ifstream("/tmp/mobile_hotspot_detected")) {
-    ui_->AAWIFIWidget->hide();
-    ui_->AAWIFIWidget2->hide();
-  } else {
-    ui_->AAUSBWidget->hide();
-    ui_->AAUSBWidget2->hide();
   }
 
   // init alpha values

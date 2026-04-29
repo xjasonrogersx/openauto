@@ -52,7 +52,7 @@ class MainWindow : public QMainWindow {
   void TriggerScriptNight();
   void openConnectDialog();
   void openWifiDialog();
-  void openUpdateDialog();
+
   void showAlphaSlider();
   void TriggerAppStart();
   void TriggerAppStop();

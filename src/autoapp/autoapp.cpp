@@ -44,8 +44,6 @@
 #include <f1x/openauto/autoapp/UI/ConnectDialog.hpp>
 #include <f1x/openauto/autoapp/UI/MainWindow.hpp>
 #include <f1x/openauto/autoapp/UI/SettingsWindow.hpp>
-#include <f1x/openauto/autoapp/UI/UpdateDialog.hpp>
-#include <f1x/openauto/autoapp/UI/WarningDialog.hpp>
 #include <fstream>
 #include <optional>
 #include <string>
@@ -255,15 +253,6 @@ int main(int argc, char* argv[]) {
   // connectdialog.setWindowFlags(Qt::WindowStaysOnTopHint);
   connectdialog.move((width - 500) / 2, (height - 300) / 2);
 
-  autoapp::ui::WarningDialog warningdialog;
-  // warningdialog.setWindowFlags(Qt::WindowStaysOnTopHint);
-  warningdialog.move((width - 500) / 2, (height - 300) / 2);
-
-  autoapp::ui::UpdateDialog updatedialog;
-  // updatedialog.setWindowFlags(Qt::WindowStaysOnTopHint);
-  updatedialog.setFixedSize(500, 260);
-  updatedialog.move((width - 500) / 2, (height - 260) / 2);
-
   QObject::connect(&mainWindow, &autoapp::ui::MainWindow::exit, []() {
     system("touch /tmp/shutdown");
     std::exit(0);
@@ -284,10 +273,6 @@ int main(int argc, char* argv[]) {
                    &connectdialog, &autoapp::ui::ConnectDialog::loadClientList);
   QObject::connect(&mainWindow, &autoapp::ui::MainWindow::openConnectDialog,
                    &connectdialog, &autoapp::ui::ConnectDialog::exec);
-  QObject::connect(&mainWindow, &autoapp::ui::MainWindow::openUpdateDialog,
-                   &updatedialog, &autoapp::ui::UpdateDialog::updateCheck);
-  QObject::connect(&mainWindow, &autoapp::ui::MainWindow::openUpdateDialog,
-                   &updatedialog, &autoapp::ui::UpdateDialog::exec);
 
   if (configuration->showCursor() == false) {
     qApplication.setOverrideCursor(Qt::BlankCursor);
@@ -389,7 +374,6 @@ int main(int argc, char* argv[]) {
       });
   mediaPlayerCommandSubscriber.start();
 
-#if 1
   app->setConnectionStateHandler([&mainWindow, width, height](bool connected) {
     autoapp::mqtt::publishConnectionState(connected);
 
@@ -416,7 +400,7 @@ int main(int argc, char* argv[]) {
         },
         Qt::QueuedConnection);
   });
-#endif
+
   QObject::connect(&connectdialog,
                    &autoapp::ui::ConnectDialog::connectionSucceed,
                    [&app](auto socket) { app->start(std::move(socket)); });
@@ -468,19 +452,14 @@ int main(int argc, char* argv[]) {
         }
       });
 
-  QObject::connect(
-      &mainWindow, &autoapp::ui::MainWindow::CloseAllDialogs,
-      [&settingsWindow, &connectdialog, &updatedialog, &warningdialog]() {
-        settingsWindow.close();
-        connectdialog.close();
-        warningdialog.close();
-        updatedialog.close();
-        OPENAUTO_LOG(debug) << "[AutoApp] Close all possible open dialogs.";
-      });
+  QObject::connect(&mainWindow, &autoapp::ui::MainWindow::CloseAllDialogs,
+                   [&settingsWindow, &connectdialog]() {
+                     settingsWindow.close();
+                     connectdialog.close();
 
-  if (configuration->hideWarning() == false) {
-    warningdialog.show();
-  }
+                     OPENAUTO_LOG(debug)
+                         << "[AutoApp] Close all possible open dialogs.";
+                   });
 
   app->waitForUSBDevice();
 
