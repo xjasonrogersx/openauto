@@ -19,7 +19,6 @@
 #include <QApplication>
 #include <f1x/openauto/autoapp/UI/MainWindow.hpp>
 #include <QFileInfo>
-#include <QFile>
 #include "ui_mainwindow.h"
 #include <QTimer>
 #include <QDateTime>
@@ -68,7 +67,6 @@ MainWindow::MainWindow(configuration::IConfiguration::Pointer configuration, QWi
    
     this->devModeEnabled = check_file_exist(this->devModeFile);
     this->wifiButtonForce = check_file_exist(this->wifiButtonFile);
-    this->brightnessButtonForce = check_file_exist(this->brightnessButtonFile);
     this->systemDebugmode = check_file_exist(this->debugModeFile);
     this->lightsensor = check_file_exist(this->lsFile);
    
@@ -109,16 +107,7 @@ MainWindow::MainWindow(configuration::IConfiguration::Pointer configuration, QWi
         ui_->labelLockDummy->hide();
     }
 
-    if (std::ifstream("/etc/crankshaft.branch")) {
-        QString branch = configuration_->readFileContent("/etc/crankshaft.branch");
-        if (branch != "crankshaft-ng") {
-            if (branch == "csng-dev") {
-                ui_->Header_Label->setText("<html><head/><body><p><span style=' font-style:normal; color:#ffffff;'>crank</span><span style=' font-style:normal; color:#5ce739;'>shaft </span><span style=' font-style:normal; color:#40bfbf;'>NG </span><span style=' font-style:normal; color:#888a85;'>- </span><span style=' font-style:normal; color:#cc0000;'>Dev-Build</span></p></body></html>");
-            } else {
-                ui_->Header_Label->setText("<html><head/><body><p><span style=' font-style:normal; color:#ffffff;'>crank</span><span style=' font-style:normal; color:#5ce739;'>shaft </span><span style=' font-style:normal; color:#40bfbf;'>NG </span><span style=' font-style:normal; color:#888a85;'>- </span><span style=' font-style:normal; color:#ce5c00;'>Custom-Build</span></p></body></html>");
-            }
-        }
-    }
+
 
     QTimer *timer=new QTimer(this);
     connect(timer, SIGNAL(timeout()),this,SLOT(showTime()));
@@ -139,13 +128,6 @@ MainWindow::MainWindow(configuration::IConfiguration::Pointer configuration, QWi
         }
     }
 
-    // hide brightness slider of control file is not existing
-    QFileInfo brightnessFile(brightnessFilename);
-    Q_UNUSED(brightnessFile);
-
-    // as default hide brightness slider
-    ui_->BrightnessSliderControl->hide();
-
     // as default hide power buttons
     ui_->exitWidget->hide();
     ui_->horizontalWidgetPower->hide();
@@ -163,25 +145,6 @@ MainWindow::MainWindow(configuration::IConfiguration::Pointer configuration, QWi
     if (!this->devModeEnabled) {
         ui_->devlabel_left->hide();
         ui_->devlabel_right->hide();
-    }
-
-    // set brightness slider attribs from cs config
-    ui_->horizontalSliderBrightness->setMinimum(configuration->getCSValue("BR_MIN").toInt());
-    ui_->horizontalSliderBrightness->setMaximum(configuration->getCSValue("BR_MAX").toInt());
-    ui_->horizontalSliderBrightness->setSingleStep(configuration->getCSValue("BR_STEP").toInt());
-    ui_->horizontalSliderBrightness->setTickInterval(configuration->getCSValue("BR_STEP").toInt());
-
-    // run monitor for custom brightness command if enabled in crankshaft_env.sh
-    if (std::ifstream("/tmp/custombrightness")) {
-        this->customBrightnessControl = true;
-    }
-
-    // read param file
-    if (std::ifstream("/boot/crankshaft/volume")) {
-        // init volume
-        QString vol=QString::number(configuration_->readFileContent("/boot/crankshaft/volume").toInt());
-        ui_->volumeValueLabel->setText(vol+"%");
-        ui_->horizontalSliderVolume->setValue(vol.toInt());
     }
 
     // switch to old menu if set in settings
@@ -227,19 +190,8 @@ MainWindow::MainWindow(configuration::IConfiguration::Pointer configuration, QWi
     // hide gui toggle if enabled in settings
     (void)configuration->hideMenuToggle();
 
-    // hide brightness button if eanbled in settings
-    if (configuration->hideBrightnessControl()) {
-        ui_->BrightnessSliderControl->hide();
-    }
-
     // init alpha values
     MainWindow::updateAlpha();
-
-    // Hide auto day/night if needed
-    if (this->lightsensor) {
-        ui_->BrightnessSliderControl->hide();
-        ui_->VolumeSliderControl->hide();
-    }
 
     watcher_tmp = new QFileSystemWatcher(this);
     watcher_tmp->addPath("/tmp");
@@ -311,38 +263,6 @@ void f1x::openauto::autoapp::ui::MainWindow::updateNetworkInfo()
         ui_->value_gw->setText("");
         ui_->value_ssid->setText("wlan0: down");
     }
-}
-
-void f1x::openauto::autoapp::ui::MainWindow::on_horizontalSliderBrightness_valueChanged(int value)
-{
-    int n = snprintf(this->brightness_str, 5, "%d", value);
-    this->brightnessFile = new QFile(this->brightnessFilename);
-    this->brightnessFileAlt = new QFile(this->brightnessFilenameAlt);
-
-    if (!this->customBrightnessControl) {
-        if (this->brightnessFile->open(QIODevice::WriteOnly)) {
-            this->brightness_str[n] = '\n';
-            this->brightness_str[n+1] = '\0';
-            this->brightnessFile->write(this->brightness_str);
-            this->brightnessFile->close();
-        }
-    } else {
-        if (this->brightnessFileAlt->open(QIODevice::WriteOnly)) {
-            this->brightness_str[n] = '\n';
-            this->brightness_str[n+1] = '\0';
-            this->brightnessFileAlt->write(this->brightness_str);
-            this->brightnessFileAlt->close();
-        }
-    }
-    QString bri=QString::number(value);
-    ui_->brightnessValueLabel->setText(bri);
-}
-
-void f1x::openauto::autoapp::ui::MainWindow::on_horizontalSliderVolume_valueChanged(int value)
-{
-    QString vol=QString::number(value);
-    ui_->volumeValueLabel->setText(vol+"%");
-    system(("/usr/local/bin/autoapp_helper setvolume " + std::to_string(value) + "&").c_str());
 }
 
 void f1x::openauto::autoapp::ui::MainWindow::updateAlpha()

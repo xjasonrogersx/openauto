@@ -20,7 +20,6 @@
 
 #include <memory>
 #include <QMainWindow>
-#include <QFile>
 #include <f1x/openauto/autoapp/Configuration/IConfiguration.hpp>
 
 #include <QFileSystemWatcher>
@@ -61,16 +60,12 @@ signals:
     void openConnectDialog();
     void openWifiDialog();
     void openUpdateDialog();
-    void showBrightnessSlider();
-    void showVolumeSlider();
     void showAlphaSlider();
     void TriggerAppStart();
     void TriggerAppStop();
     void CloseAllDialogs();
 
 private slots:
-    void on_horizontalSliderBrightness_valueChanged(int value);
-    void on_horizontalSliderVolume_valueChanged(int value);
     void updateAlpha();
 
 private slots:
@@ -86,19 +81,12 @@ private:
     Ui::MainWindow* ui_;
     configuration::IConfiguration::Pointer configuration_;
 
-    QString brightnessFilename = "/sys/class/backlight/rpi_backlight/brightness";
-    QString brightnessFilenameAlt = "/tmp/custombrightness";
-    QFile *brightnessFile;
-    QFile *brightnessFileAlt;
-    char brightness_str[6];
-    char volume_str[6];
     int alpha_current_str;
     QString bversion;
     QString bdate;
 
     char devModeFile[32] = "/tmp/dev_mode_enabled";
     char wifiButtonFile[32] = "/etc/button_wifi_visible";
-    char brightnessButtonFile[32] = "/etc/button_brightness_visible";
     char debugModeFile[32] = "/tmp/usb_debug_mode";
     char lsFile[32] = "/etc/cs_lightsensor";
 
@@ -125,10 +113,7 @@ private:
 
     QString date_text;
 
-    bool customBrightnessControl = false;
-
     bool wifiButtonForce = false;
-    bool brightnessButtonForce = false;
 
 
     bool devModeEnabled = false;
