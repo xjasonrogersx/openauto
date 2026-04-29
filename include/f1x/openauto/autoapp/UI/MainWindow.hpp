@@ -23,24 +23,6 @@
 #include <QFile>
 #include <f1x/openauto/autoapp/Configuration/IConfiguration.hpp>
 
-#include <QMediaPlayer>
-#include <QListWidgetItem>
-#include <QListWidget>
-#include <QMediaMetaData>
-#include <QDir>
-#include <QDirIterator>
-
-#include <QMediaService>
-#include <QMediaPlaylist>
-#include <QVideoProbe>
-#include <QAudioProbe>
-
-#include <QFileDialog>
-
-#include <qmediaplayer.h>
-#include <taglib/fileref.h>
-#include <taglib/tag.h>
-
 #include <QFileSystemWatcher>
 #include <QKeyEvent>
 
@@ -67,8 +49,6 @@ class MainWindow : public QMainWindow
 public:
     explicit MainWindow(configuration::IConfiguration::Pointer configuration, QWidget *parent = nullptr);
     ~MainWindow() override;
-    QMediaPlayer* player;
-    QFileSystemWatcher* watcher;
     QFileSystemWatcher* watcher_tmp; 
 
 signals:
@@ -78,25 +58,12 @@ signals:
     void toggleCursor();
     void TriggerScriptDay();
     void TriggerScriptNight();
-    void cameraShow();
-    void cameraHide();
-    void cameraStop();
-    void cameraSave();
-    void cameraRecord();
-    void cameraPosYUp();
-    void cameraPosYDown();
-    void cameraZoomPlus();
-    void cameraZoomMinus();
-    void cameraFlipX();
-    void cameraFlipY();
     void openConnectDialog();
     void openWifiDialog();
     void openUpdateDialog();
     void showBrightnessSlider();
     void showVolumeSlider();
     void showAlphaSlider();
-    void showRearCam();
-    void hideRearCam();
     void TriggerAppStart();
     void TriggerAppStop();
     void CloseAllDialogs();
@@ -108,33 +75,12 @@ private slots:
 
 private slots:
     void showTime();
-    void cameraControlShow();
-    void cameraControlHide();
-    void playerShow();
-    void playerHide();
-
-
-    void on_horizontalSliderProgressPlayer_sliderMoved(int position);
-    void on_horizontalSliderVolumePlayer_sliderMoved(int position);
-    void on_positionChanged(qint64 position);
-    void on_durationChanged(qint64 position);
-    void on_mp3List_itemClicked(QListWidgetItem *item);
-    void metaDataChanged();
-    void on_comboBoxAlbum_currentIndexChanged(const QString &arg1);
-    void on_mp3List_currentRowChanged(int currentRow);
-    void on_StateChanged(QMediaPlayer::State state);
-    void scanFolders();
-    void scanFiles();
     void tmpChanged();
-    void setTrigger();
     void setRetryUSBConnect();
     void resetRetryUSBMessage();
     void updateNetworkInfo();
     bool check_file_exist(const char *filename);
     void hostModeStateChanged(QBluetoothLocalDevice::HostMode);
-
-    //void on_AlbumCoverListView_clicked(const QModelIndex &index);
-    void on_AlbumCoverListView_clicked(const QModelIndex &index);
 
 private:
     Ui::MainWindow* ui_;
@@ -152,7 +98,6 @@ private:
 
     char devModeFile[32] = "/tmp/dev_mode_enabled";
     char wifiButtonFile[32] = "/etc/button_wifi_visible";
-    char cameraButtonFile[32] = "/etc/button_camera_visible";
     char brightnessButtonFile[32] = "/etc/button_brightness_visible";
     char debugModeFile[32] = "/tmp/usb_debug_mode";
     char lsFile[32] = "/etc/cs_lightsensor";
@@ -178,17 +123,11 @@ private:
     QString custom_button_color_c5 = "186,189,192";
     QString custom_button_color_c6 = "186,189,192";
 
-    QString selectedMp3file;
-    QString musicfolder = "/media/CSSTORAGE/Music";
-    QString albumfolder = "/";
     QString date_text;
-
-    QMediaPlaylist *playlist;
 
     bool customBrightnessControl = false;
 
     bool wifiButtonForce = false;
-    bool cameraButtonForce = false;
     bool brightnessButtonForce = false;
 
 
@@ -212,9 +151,7 @@ private:
     bool NoClock = false;
 
     bool hotspotActive = false;
-    int currentPlaylistIndex = 0;
     bool background_set = false;
-    bool mediacontentchanged = true;
 
     bool lightsensor = false;
 
@@ -222,9 +159,6 @@ private:
     bool udevupdate = false;
     bool openautoupdate = false;
     bool systemupdate = false;
-
-    int camera_ycorection;
-    int camera_zoom;
 
     QBluetoothLocalDevice *localDevice;
 

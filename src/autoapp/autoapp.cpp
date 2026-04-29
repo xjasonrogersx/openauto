@@ -261,51 +261,6 @@ int main(int argc, char* argv[])
         qApplication.setOverrideCursor(Qt::ArrowCursor);
     }
 
-    QObject::connect(&mainWindow, &autoapp::ui::MainWindow::cameraHide, [&qApplication]() {
-        system("/opt/crankshaft/cameracontrol.py Background &");
-        OPENAUTO_LOG(debug) << "[AutoApp] Camera Background.";
-    });
-
-    QObject::connect(&mainWindow, &autoapp::ui::MainWindow::cameraShow, [&qApplication]() {
-        system("/opt/crankshaft/cameracontrol.py Foreground &");
-        OPENAUTO_LOG(debug) << "[AutoApp] Camera Foreground.";
-    });
-
-    QObject::connect(&mainWindow, &autoapp::ui::MainWindow::cameraPosYUp, [&qApplication]() {
-        system("/opt/crankshaft/cameracontrol.py PosYUp &");
-        OPENAUTO_LOG(debug) << "[AutoApp] Camera PosY up.";
-    });
-
-    QObject::connect(&mainWindow, &autoapp::ui::MainWindow::cameraPosYDown, [&qApplication]() {
-        system("/opt/crankshaft/cameracontrol.py PosYDown &");
-        OPENAUTO_LOG(debug) << "[AutoApp] Camera PosY down.";
-    });
-
-    QObject::connect(&mainWindow, &autoapp::ui::MainWindow::cameraZoomPlus, [&qApplication]() {
-        system("/opt/crankshaft/cameracontrol.py ZoomPlus &");
-        OPENAUTO_LOG(debug) << "[AutoApp] Camera Zoom plus.";
-    });
-
-    QObject::connect(&mainWindow, &autoapp::ui::MainWindow::cameraZoomMinus, [&qApplication]() {
-        system("/opt/crankshaft/cameracontrol.py ZoomMinus &");
-        OPENAUTO_LOG(debug) << "[AutoApp] Camera Zoom minus.";
-    });
-
-    QObject::connect(&mainWindow, &autoapp::ui::MainWindow::cameraRecord, [&qApplication]() {
-        system("/opt/crankshaft/cameracontrol.py Record &");
-        OPENAUTO_LOG(debug) << "[AutoApp] Camera Record.";
-    });
-
-    QObject::connect(&mainWindow, &autoapp::ui::MainWindow::cameraStop, [&qApplication]() {
-        system("/opt/crankshaft/cameracontrol.py Stop &");
-        OPENAUTO_LOG(debug) << "[AutoApp] Camera Stop.";
-    });
-
-    QObject::connect(&mainWindow, &autoapp::ui::MainWindow::cameraSave, [&qApplication]() {
-        system("/opt/crankshaft/cameracontrol.py Save &");
-        OPENAUTO_LOG(debug) << "[AutoApp] Camera Save.";
-    });
-
     QObject::connect(&mainWindow, &autoapp::ui::MainWindow::TriggerScriptNight, [&qApplication]() {
         autoapp::mqtt::publishNightModeState(true);
         OPENAUTO_LOG(debug) << "[AutoApp] MainWindow Night.";

@@ -68,7 +68,6 @@ MainWindow::MainWindow(configuration::IConfiguration::Pointer configuration, QWi
    
     this->devModeEnabled = check_file_exist(this->devModeFile);
     this->wifiButtonForce = check_file_exist(this->wifiButtonFile);
-    this->cameraButtonForce = check_file_exist(this->cameraButtonFile);
     this->brightnessButtonForce = check_file_exist(this->brightnessButtonFile);
     this->systemDebugmode = check_file_exist(this->debugModeFile);
     this->lightsensor = check_file_exist(this->lsFile);
@@ -125,12 +124,6 @@ MainWindow::MainWindow(configuration::IConfiguration::Pointer configuration, QWi
     connect(timer, SIGNAL(timeout()),this,SLOT(showTime()));
     timer->start(1000);
 
-    // enable connects while cam is enabled
-    if (this->cameraButtonForce) {
-        this->camera_ycorection=configuration->getCSValue("RPICAM_YCORRECTION").toInt();
-        this->camera_zoom=configuration->getCSValue("RPICAM_ZOOM").toInt();
-    }
-
     ui_->btDevice->hide();
 
     // check if a device is connected via bluetooth
@@ -153,9 +146,6 @@ MainWindow::MainWindow(configuration::IConfiguration::Pointer configuration, QWi
     // as default hide brightness slider
     ui_->BrightnessSliderControl->hide();
 
-    // as default hide volume slider player
-    ui_->VolumeSliderControlPlayer->hide();
-
     // as default hide power buttons
     ui_->exitWidget->hide();
     ui_->horizontalWidgetPower->hide();
@@ -168,11 +158,6 @@ MainWindow::MainWindow(configuration::IConfiguration::Pointer configuration, QWi
         ui_->AAUSBWidget->hide();
         ui_->AAUSBWidget2->hide();
     }
-
-    // as default hide camera controls
-    ui_->cameraWidget->hide();
-
-   
 
     // show dev labels if dev mode activated
     if (!this->devModeEnabled) {
@@ -255,44 +240,6 @@ MainWindow::MainWindow(configuration::IConfiguration::Pointer configuration, QWi
         ui_->BrightnessSliderControl->hide();
         ui_->VolumeSliderControl->hide();
     }
-
-    player = new QMediaPlayer(this);
-    playlist = new QMediaPlaylist(this);
-    connect(player, &QMediaPlayer::positionChanged, this, &MainWindow::on_positionChanged);
-    connect(player, &QMediaPlayer::durationChanged, this, &MainWindow::on_durationChanged);
-    connect(player, &QMediaPlayer::metaDataAvailableChanged, this, &MainWindow::metaDataChanged);
-    connect(player, &QMediaPlayer::stateChanged, this, &MainWindow::on_StateChanged);
-
-    ui_->PlayerPlayingWidget->hide();
-
-    this->musicfolder = QString::fromStdString(configuration->getMp3MasterPath());
-    this->albumfolder = QString::fromStdString(configuration->getMp3SubFolder());
-
-    ui_->labelFolderpath->setText(this->musicfolder);
-    ui_->labelAlbumpath->setText(this->albumfolder);
-
-    ui_->labelFolderpath->hide();
-    ui_->labelAlbumpath->hide();
-    ui_->comboBoxAlbum->hide();
-
-    MainWindow::scanFolders();
-    ui_->comboBoxAlbum->setCurrentText(QString::fromStdString(configuration->getMp3SubFolder()));
-    MainWindow::scanFiles();
-    player->setPlaylist(this->playlist);
-    ui_->mp3List->setCurrentRow(configuration->getMp3Track());
-    this->currentPlaylistIndex = configuration->getMp3Track();
-
-    if (configuration->mp3AutoPlay()) {
-        MainWindow::playerShow();
-        MainWindow::playerHide();
-        if (configuration->showAutoPlay()) {
-            MainWindow::playerShow();
-        }
-    }
-
-    watcher = new QFileSystemWatcher(this);
-    watcher->addPath("/media/USBDRIVES");
-    connect(watcher, &QFileSystemWatcher::directoryChanged, this, &MainWindow::setTrigger);
 
     watcher_tmp = new QFileSystemWatcher(this);
     watcher_tmp->addPath("/tmp");
@@ -405,66 +352,6 @@ void f1x::openauto::autoapp::ui::MainWindow::updateAlpha()
 }
 
 
-void f1x::openauto::autoapp::ui::MainWindow::cameraControlHide()
-{
-    if (this->cameraButtonForce) {
-        ui_->cameraWidget->hide();
-        if (!this->oldGUIStyle) {
-            ui_->menuWidget->show();
-        } else {
-            ui_->oldmenuWidget->show();
-        }
-    }
-}
-
-void f1x::openauto::autoapp::ui::MainWindow::cameraControlShow()
-{
-    if (this->cameraButtonForce) {
-        if (!this->oldGUIStyle) {
-            ui_->menuWidget->hide();
-        } else {
-            ui_->oldmenuWidget->hide();
-        }
-        ui_->cameraWidget->show();
-    }
-}
-
-void f1x::openauto::autoapp::ui::MainWindow::playerShow()
-{
-
-    if (!this->oldGUIStyle) {
-        ui_->menuWidget->hide();
-    } else {
-        ui_->oldmenuWidget->hide();
-    }
-    ui_->mediaWidget->show();
-    ui_->VolumeSliderControlPlayer->show();
-    ui_->VolumeSliderControl->hide();
-    ui_->BrightnessSliderControl->hide();
-    ui_->networkInfo->hide();
-    ui_->Info->hide();
-    ui_->horizontalSliderProgressPlayer->hide();
-    ui_->VolumeSliderControlPlayer->hide();
-}
-
-void f1x::openauto::autoapp::ui::MainWindow::playerHide()
-{
-    if (!this->oldGUIStyle) {
-        ui_->menuWidget->show();
-    } else {
-        ui_->oldmenuWidget->show();
-    }
-    ui_->mediaWidget->hide();
-    ui_->VolumeSliderControl->show();
-    ui_->VolumeSliderControlPlayer->hide();
-    ui_->BrightnessSliderControl->hide();
-    if (configuration_->showNetworkinfo()) {
-        ui_->networkInfo->hide();
-    }
-
-    f1x::openauto::autoapp::ui::MainWindow::tmpChanged();
-}
-
 void f1x::openauto::autoapp::ui::MainWindow::showTime()
 {
     QTime time=QTime::currentTime();
@@ -509,141 +396,6 @@ void f1x::openauto::autoapp::ui::MainWindow::showTime()
     }
 }
 
-void f1x::openauto::autoapp::ui::MainWindow::on_horizontalSliderProgressPlayer_sliderMoved(int position)
-{
-    player->setPosition(position);
-}
-
-void f1x::openauto::autoapp::ui::MainWindow::on_horizontalSliderVolumePlayer_sliderMoved(int position)
-{
-    player->setVolume(position);
-    ui_->volumeValueLabelPlayer->setText(QString::number(position) + "%");
-}
-
-void f1x::openauto::autoapp::ui::MainWindow::on_positionChanged(qint64 position)
-{
-    ui_->horizontalSliderProgressPlayer->setValue(position);
-
-    //Setting the time
-    QString time_elapsed, time_total;
-
-    int total_seconds, total_minutes;
-
-    total_seconds = (player->duration()/1000) % 60;
-    total_minutes = (player->duration()/1000) / 60;
-
-    if(total_minutes >= 60){
-        int total_hours = (total_minutes/60);
-        total_minutes = total_minutes - (total_hours*60);
-        time_total = QString("%1").arg(total_hours, 2,10,QChar('0')) + ':' + QString("%1").arg(total_minutes, 2,10,QChar('0')) + ':' + QString("%1").arg(total_seconds, 2,10,QChar('0'));
-
-    }else{
-        time_total = QString("%1").arg(total_minutes, 2,10,QChar('0')) + ':' + QString("%1").arg(total_seconds, 2,10,QChar('0'));
-
-    }
-
-    //calculate time elapsed
-    int seconds, minutes;
-
-    seconds = (position/1000) % 60;
-    minutes = (position/1000) / 60;
-
-    //if minutes is over 60 then we should really display hours
-    if(minutes >= 60){
-        int hours = (minutes/60);
-        minutes = minutes - (hours*60);
-        time_elapsed = QString("%1").arg(hours, 2,10,QChar('0')) + ':' + QString("%1").arg(minutes, 2,10,QChar('0')) + ':' + QString("%1").arg(seconds, 2,10,QChar('0'));
-    }else{
-        time_elapsed = QString("%1").arg(minutes, 2,10,QChar('0')) + ':' + QString("%1").arg(seconds, 2,10,QChar('0'));
-    }
-    ui_->playerPositionTime->setText(time_elapsed + " / " + time_total);
-}
-
-void f1x::openauto::autoapp::ui::MainWindow::on_durationChanged(qint64 position)
-{
-    ui_->horizontalSliderProgressPlayer->setMaximum(position);
-}
-
-void f1x::openauto::autoapp::ui::MainWindow::on_mp3List_itemClicked(QListWidgetItem *item)
-{
-    this->selectedMp3file = item->text();
-}
-
-void f1x::openauto::autoapp::ui::MainWindow::metaDataChanged()
-{
-    QString fullpathplaying = player->currentMedia().request().url().toString();
-
-    try {
-        // use metadata from mp3list widget (prescanned id3 by taglib)
-        if (playlist->currentIndex() != -1 && fullpathplaying != "") {
-            QString currentsong = ui_->mp3List->item(playlist->currentIndex())->text();
-            ui_->labelCurrentPlaying->setText(currentsong);
-            if (currentsong.length() > 48) {
-                int id = QFontDatabase::addApplicationFont(":/Roboto-Regular.ttf");
-                QString family = QFontDatabase::applicationFontFamilies(id).at(0);
-                QFont _font(family, 12, QFont::Bold);
-                _font.setItalic(true);
-                ui_->labelCurrentPlaying->setFont(_font);
-            } else {
-                int id = QFontDatabase::addApplicationFont(":/Roboto-Regular.ttf");
-                QString family = QFontDatabase::applicationFontFamilies(id).at(0);
-                QFont _font(family, 16, QFont::Bold);
-                _font.setItalic(true);
-                ui_->labelCurrentPlaying->setFont(_font);
-            }
-        }
-    } catch (...) {
-        // use metadata from player
-        QString AlbumInterpret = player->metaData(QMediaMetaData::AlbumArtist).toString();
-        QString Title = player->metaData(QMediaMetaData::Title).toString();
-
-        if (AlbumInterpret == "" && ui_->comboBoxAlbum->currentText() != ".") {
-            AlbumInterpret = ui_->comboBoxAlbum->currentText();
-        }
-        QString currentPlaying;
-
-        if (AlbumInterpret != "") {
-            currentPlaying.append(AlbumInterpret);
-        }
-        if (Title != "" && AlbumInterpret != "") {
-            currentPlaying.append(" - ");
-        }
-        if (Title != "") {
-            currentPlaying.append(Title);
-        }
-        ui_->labelCurrentPlaying->setText(currentPlaying);
-    }
-    ui_->labelTrack->setText(QString::number(playlist->currentIndex()+1));
-    ui_->labelTrackCount->setText(QString::number(playlist->mediaCount()));
-
-    if (playlist->currentIndex() == -1) {
-        ui_->labelCurrentPlaying->setText(ui_->comboBoxAlbum->currentText());
-    }
-
-    // Write current playing album and track to config
-    this->configuration_->setMp3Track(playlist->currentIndex());
-    this->configuration_->setMp3SubFolder(ui_->comboBoxAlbum->currentText().toStdString());
-    this->configuration_->save();
-}
-
-void f1x::openauto::autoapp::ui::MainWindow::on_comboBoxAlbum_currentIndexChanged(const QString &arg1)
-{
-    this->albumfolder = arg1;
-    MainWindow::scanFiles();
-    ui_->labelCurrentPlaying->setText("");
-    ui_->playerPositionTime->setText("");
-}
-
-void f1x::openauto::autoapp::ui::MainWindow::setTrigger()
-{
-    this->mediacontentchanged = true;
-
-    ui_->SysinfoTopLeft->setText("Media changed - Scanning ...");
-    ui_->SysinfoTopLeft->show();
-
-    QTimer::singleShot(10000, this, SLOT(scanFolders()));
-}
-
 void f1x::openauto::autoapp::ui::MainWindow::setRetryUSBConnect()
 {
     ui_->SysinfoTopLeft->setText("Trying USB connect ...");
@@ -657,126 +409,6 @@ void f1x::openauto::autoapp::ui::MainWindow::resetRetryUSBMessage()
     ui_->SysinfoTopLeft->setText("");
     ui_->SysinfoTopLeft->hide();
 }
-
-void f1x::openauto::autoapp::ui::MainWindow::scanFolders()
-{
-    try {
-        if (this->mediacontentchanged == true) {
-            this->mediacontentchanged = false;
-            int cleaner = ui_->comboBoxAlbum->count();
-            while (cleaner > -1) {
-                ui_->comboBoxAlbum->removeItem(cleaner);
-                cleaner--;
-            }
-            QDir directory(this->musicfolder);
-            QStringList folders = directory.entryList(QStringList() << "*", QDir::AllDirs, QDir::Name);
-            QStandardItemModel *model = new QStandardItemModel(this);
-            foreach (QString foldername, folders) {
-                if (foldername != ".." and foldername != ".") {
-                    ui_->comboBoxAlbum->addItem(foldername);
-                    ui_->labelAlbumCount->setText(QString::number(ui_->comboBoxAlbum->count()));                 
-
-                    QString coverpng = this->musicfolder + "/" + foldername + "/folder.png";
-                    QString coverjpg = this->musicfolder + "/" + foldername + "/folder.jpg";
-                    QString coverpngcs = "/media/USBDRIVES/CSSTORAGE/COVERCACHE/" + foldername + ".png";
-                    QString coverjpgcs = "/media/USBDRIVES/CSSTORAGE/COVERCACHE/" + foldername + ".jpg";
-
-                    if (check_file_exist(coverpng.toStdString().c_str())) {
-                        QPixmap img = coverpng;
-                        QStandardItem *item = new QStandardItem(QIcon(img.scaled(270,270,Qt::KeepAspectRatio)),foldername);
-                        model->setItem(ui_->comboBoxAlbum->count(),0,item);
-                    } else if (check_file_exist(coverjpg.toStdString().c_str())) {
-                        QPixmap img = coverjpg;
-                        QStandardItem *item = new QStandardItem(QIcon(img.scaled(270,270,Qt::KeepAspectRatio)),foldername);
-                        model->setItem(ui_->comboBoxAlbum->count(),0,item);
-                    } else if (check_file_exist(coverpngcs.toStdString().c_str())) {
-                        QPixmap img = coverpngcs;
-                        QStandardItem *item = new QStandardItem(QIcon(img.scaled(270,270,Qt::KeepAspectRatio)),foldername);
-                        model->setItem(ui_->comboBoxAlbum->count(),0,item);
-                    } else if (check_file_exist(coverjpgcs.toStdString().c_str())) {
-                        QPixmap img = coverjpgcs;
-                        QStandardItem *item = new QStandardItem(QIcon(img.scaled(270,270,Qt::KeepAspectRatio)),foldername);
-                        model->setItem(ui_->comboBoxAlbum->count(),0,item);
-                    } else {
-                        QStandardItem *item = new QStandardItem(QIcon(":/coverlogo.png"),foldername);
-                        model->setItem(ui_->comboBoxAlbum->count(),0,item);
-                    }
-                }
-            }
-            ui_->AlbumCoverListView->setModel(model);
-            this->currentPlaylistIndex = 0;
-            ui_->SysinfoTopLeft->hide();
-        }
-    }
-    catch(...) {
-        ui_->SysinfoTopLeft->hide();
-    }
-    ui_->mp3List->hide();
-}
-
-void f1x::openauto::autoapp::ui::MainWindow::scanFiles()
-{
-    if (this->mediacontentchanged == false) {
-        int cleaner = ui_->mp3List->count();
-        while (cleaner > -1) {
-            ui_->mp3List->takeItem(cleaner);
-            cleaner--;
-        }
-        this->playlist->clear();
-
-        QList<QMediaContent> content;
-        QDir directory(this->musicfolder + "/" + this->albumfolder);
-        QStringList mp3s = directory.entryList(QStringList() << "*.mp3" << "*.flac" << "*.aac" << "*.ogg" << "*.mp4" << "*.mp4a" << "*.wma" << "*.strm",QDir::Files, QDir::Name);
-        foreach (QString filename, mp3s) {
-            // add to mediacontent
-            if (filename.endsWith(".strm")) {
-                QString url=configuration_->readFileContent(this->musicfolder + "/" + this->albumfolder + "/" + filename);
-                content.push_back(QMediaContent(QUrl(url)));
-                ui_->mp3List->addItem(filename.replace(".strm",""));
-            } else {
-                // add items to gui
-                content.push_back(QMediaContent(QUrl::fromLocalFile(this->musicfolder + "/" + this->albumfolder + "/" + filename)));
-                // read metadata using taglib
-                try {
-                    TagLib::FileRef file((this->musicfolder + "/" + this->albumfolder + "/" + filename).toUtf8(),true);
-                    TagLib::String artist_string = file.tag()->artist();
-                    TagLib::String title_string = file.tag()->title();
-                    unsigned int track_string = file.tag()->track();
-                    QString artistid3 = QString::fromStdWString(artist_string.toCWString());
-                    QString titleid3 = QString::fromStdWString(title_string.toCWString());
-                    QString trackid3 = QString::number(track_string);
-                    int tracklength = trackid3.length();
-                    if (tracklength < 2) {
-                        trackid3 = "0" + trackid3;
-                    }
-                    QString ID3Entry = trackid3 + ": " + artistid3 + " - " + titleid3;
-                    ui_->mp3List->addItem(ID3Entry);
-                } catch (...) {
-                    // old way only adding filename to list
-                    ui_->mp3List->addItem(filename);
-                }
-            }
-        }
-        // set playlist
-        this->playlist->addMedia(content);
-    }
-}
-
-void f1x::openauto::autoapp::ui::MainWindow::on_mp3List_currentRowChanged(int currentRow)
-{
-    ui_->labelFolderpath->setText(QString::number(currentRow));
-    this->currentPlaylistIndex = currentRow;
-}
-
-void f1x::openauto::autoapp::ui::MainWindow::on_StateChanged(QMediaPlayer::State state)
-{
-    if (state == QMediaPlayer::StoppedState || state == QMediaPlayer::PausedState) {
-        std::remove("/tmp/media_playing");
-    } else {
-        std::ofstream("/tmp/media_playing");
-    }
-}
-
 
 bool f1x::openauto::autoapp::ui::MainWindow::check_file_exist(const char *fileName)
 {
@@ -810,16 +442,6 @@ void f1x::openauto::autoapp::ui::MainWindow::keyPressEvent(QKeyEvent *event)
     if(event->key() == Qt::Key_Escape)
     {
     }
-}
-
-void f1x::openauto::autoapp::ui::MainWindow::on_AlbumCoverListView_clicked(const QModelIndex &index)
-{
-    QString foldertext = index.data(Qt::DisplayRole).toString();
-    ui_->labelAlbumpath->setText(foldertext);
-    ui_->comboBoxAlbum->setCurrentIndex(ui_->comboBoxAlbum->findText(foldertext));
-
-    ui_->mp3List->show();
-    ui_->AlbumCoverListView->hide();
 }
 
 void f1x::openauto::autoapp::ui::MainWindow::tmpChanged()
