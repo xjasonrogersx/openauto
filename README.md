@@ -163,9 +163,48 @@ openauto/phone/debug {"component":"audio","event":"stream_stopped","message":"ch
 | AA guidance stream active (media also active) | 0% (stay muted) |
 | Neither AA stream active | 100% |
 
+
+#### Microphone handling
+
+OpenAuto captures microphone audio locally on the head unit and sends it to the phone over Android Auto's microphone media-source channel.
+
+Data path:
+
+```
+Microphone (USB / HAT / onboard input)
+    │  PCM capture (mono, 16-bit, 16 kHz)
+    ▼
+QtAudioInput (QAudioInput)
+    │  onReadyRead() chunks
+    ▼
+MediaSourceService / MicrophoneMediaSourceService
+    │  sendMediaSourceWithTimestampIndication()
+    ▼
+Android phone (Assistant / voice recognition)
+```
+
+Operational behavior:
+
+- If Android requests microphone open, OpenAuto starts local capture and streams PCM frames.
+- If no input device is available (or open fails), OpenAuto returns an internal microphone error to Android.
+- There is no local fallback microphone engine in OpenAuto itself. Any fallback behavior (for example using the handset mic) is controlled by the phone/Assistant side.
+
+#### Hotword and voice trigger
+
+- Hotword detection (for example, "Hey Google") is performed on the phone, not by OpenAuto.
+- A voice-command button/key can also be used to trigger voice input manually.
+- Pressing the button is optional in normal operation when phone-side hotword triggering is available.
+
+
 #### Mixer script
 
-See `src/audio_mixer/audio_mixer.py`. Run as a systemd user service alongside openauto and dab_tuner.
+See `audio_mixer/audio_mixer.py`. Run as a systemd service alongside openauto and dab_tuner.
+
+Important environment knobs:
+
+- `DAB_SINK_NAME`: substring used to find the DAB sink-input in `wpctl status` (default `ffmpeg`)
+- `DUCK_LEVEL`: ducked DAB volume for guidance-only state (default `0.2` = 20%)
+- `OPENAUTO_TOPIC_PREFIX`: base topic prefix (default `openauto/phone`)
 
 ```ini
 # /etc/systemd/system/audio-mixer.service
@@ -174,10 +213,11 @@ Description=Audio Mixer / Ducking Service
 After=network.target pipewire.service
 
 [Service]
-ExecStart=/usr/bin/python3 /home/pi/openauto/src/audio_mixer/audio_mixer.py
+ExecStart=/usr/bin/python3 /home/pi/openauto/audio_mixer/audio_mixer.py
 Restart=on-failure
 Environment=MQTT_HOST=127.0.0.1
 Environment=DAB_SINK_NAME=ffmpeg
+Environment=DUCK_LEVEL=0.20
 Environment=OPENAUTO_TOPIC_PREFIX=openauto/phone
 
 [Install]
