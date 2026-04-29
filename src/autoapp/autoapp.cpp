@@ -43,7 +43,6 @@
 #include <f1x/openauto/autoapp/Service/ServiceFactory.hpp>
 #include <f1x/openauto/autoapp/UI/ConnectDialog.hpp>
 #include <f1x/openauto/autoapp/UI/MainWindow.hpp>
-#include <f1x/openauto/autoapp/UI/SettingsWindow.hpp>
 #include <fstream>
 #include <optional>
 #include <string>
@@ -238,12 +237,6 @@ int main(int argc, char* argv[]) {
   autoapp::ui::MainWindow mainWindow(configuration);
   // mainWindow.setWindowFlags(Qt::WindowStaysOnTopHint);
 
-  autoapp::ui::SettingsWindow settingsWindow(configuration);
-  // settingsWindow.setWindowFlags(Qt::WindowStaysOnTopHint);
-
-  settingsWindow.setFixedSize(width, height);
-  settingsWindow.adjustSize();
-
   autoapp::configuration::RecentAddressesList recentAddressesList(7);
   recentAddressesList.read();
 
@@ -261,14 +254,7 @@ int main(int argc, char* argv[]) {
     system("touch /tmp/reboot");
     std::exit(0);
   });
-  QObject::connect(&mainWindow, &autoapp::ui::MainWindow::openSettings,
-                   &settingsWindow,
-                   &autoapp::ui::SettingsWindow::showFullScreen);
-  QObject::connect(&mainWindow, &autoapp::ui::MainWindow::openSettings,
-                   &settingsWindow, &autoapp::ui::SettingsWindow::show_tab1);
-  QObject::connect(&mainWindow, &autoapp::ui::MainWindow::openSettings,
-                   &settingsWindow,
-                   &autoapp::ui::SettingsWindow::loadSystemValues);
+
   QObject::connect(&mainWindow, &autoapp::ui::MainWindow::openConnectDialog,
                    &connectdialog, &autoapp::ui::ConnectDialog::loadClientList);
   QObject::connect(&mainWindow, &autoapp::ui::MainWindow::openConnectDialog,
@@ -453,8 +439,7 @@ int main(int argc, char* argv[]) {
       });
 
   QObject::connect(&mainWindow, &autoapp::ui::MainWindow::CloseAllDialogs,
-                   [&settingsWindow, &connectdialog]() {
-                     settingsWindow.close();
+                   [&connectdialog]() {
                      connectdialog.close();
 
                      OPENAUTO_LOG(debug)
