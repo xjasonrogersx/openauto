@@ -52,8 +52,20 @@ MainWindow::MainWindow(configuration::IConfiguration::Pointer configuration, QWi
     , ui_(new Ui::MainWindow)
     , localDevice(new QBluetoothLocalDevice)
 {
-    // set default bg color to black
-    this->setStyleSheet("QMainWindow {background-color: rgb(0,0,0);}");
+    // Set background image for the main window, fallback to black if missing.
+    const QString backgroundImage = "/home/pi/openauto/images/1777450215290.png";
+    if (QFileInfo::exists(backgroundImage)) {
+        this->setStyleSheet(QString(
+            "QMainWindow {"
+            "background-color: rgb(0,0,0);"
+            "background-image: url(%1);"
+            "background-position: center;"
+            "background-repeat: no-repeat;"
+            "}"
+        ).arg(backgroundImage));
+    } else {
+        this->setStyleSheet("QMainWindow {background-color: rgb(0,0,0);}");
+    }
 
     // Set default font and size
     int id = QFontDatabase::addApplicationFont(":/Roboto-Regular.ttf");
@@ -65,7 +77,6 @@ MainWindow::MainWindow(configuration::IConfiguration::Pointer configuration, QWi
 
     // trigger files
    
-    this->devModeEnabled = check_file_exist(this->devModeFile);
     this->wifiButtonForce = check_file_exist(this->wifiButtonFile);
     this->systemDebugmode = check_file_exist(this->debugModeFile);
     this->lightsensor = check_file_exist(this->lsFile);
@@ -79,39 +90,7 @@ MainWindow::MainWindow(configuration::IConfiguration::Pointer configuration, QWi
     this->setAttribute(Qt::WA_NoSystemBackground, false);
     this->setAutoFillBackground(true);
 
-    // Button click handlers removed.
 
-    ui_->clockOnlyWidget->hide();
-
-    ui_->labelBluetoothPairable->hide();
-
-    // by default hide media player
-    ui_->mediaWidget->hide();
-
-    ui_->SysinfoTopLeft->hide();
-
-    ui_->ButtonAndroidAuto->hide();
-
-    ui_->SysinfoTopLeft2->hide();
-
-    ui_->label_dummy_right->hide();
-
-    ui_->dcRecording->hide();
-
-    if (!configuration->showNetworkinfo()) {
-        ui_->networkInfo->hide();
-    }
-
-    if (!this->devModeEnabled) {
-        ui_->labelLock->hide();
-        ui_->labelLockDummy->hide();
-    }
-
-
-
-    QTimer *timer=new QTimer(this);
-    connect(timer, SIGNAL(timeout()),this,SLOT(showTime()));
-    timer->start(1000);
 
     ui_->btDevice->hide();
 
@@ -128,9 +107,7 @@ MainWindow::MainWindow(configuration::IConfiguration::Pointer configuration, QWi
         }
     }
 
-    // as default hide power buttons
-    ui_->exitWidget->hide();
-    ui_->horizontalWidgetPower->hide();
+
 
     // hide wifi if not forced
     if (!this->wifiButtonForce && !std::ifstream("/tmp/mobile_hotspot_detected")) {
@@ -140,55 +117,6 @@ MainWindow::MainWindow(configuration::IConfiguration::Pointer configuration, QWi
         ui_->AAUSBWidget->hide();
         ui_->AAUSBWidget2->hide();
     }
-
-    // show dev labels if dev mode activated
-    if (!this->devModeEnabled) {
-        ui_->devlabel_left->hide();
-        ui_->devlabel_right->hide();
-    }
-
-    // switch to old menu if set in settings
-    if (!configuration->oldGUI()) {
-        this->oldGUIStyle = false;
-        ui_->menuWidget->show();
-        ui_->oldmenuWidget->hide();
-    } else {
-        this->oldGUIStyle = true;
-        ui_->oldmenuWidget->show();
-        ui_->menuWidget->hide();
-    }
-
-
-
-    // use big clock in classic gui?
-    if (configuration->showBigClock()) {
-        this->UseBigClock = true;
-    } else {
-        this->UseBigClock = false;
-    }
-
-    // clock viibility by settings
-    if (!configuration->showClock()) {
-        ui_->Digital_clock->hide();
-        ui_->bigClock->hide();
-        this->NoClock = true;
-    } else {
-        this->NoClock = false;
-        if (this->UseBigClock) {
-            ui_->oldmenuDummy->hide();
-            ui_->bigClock->show();
-            if (oldGUIStyle) {
-                ui_->Digital_clock->hide();
-            }
-        } else {
-            ui_->oldmenuDummy->show();
-            ui_->Digital_clock->show();
-            ui_->bigClock->hide();
-        }
-    }
-
-    // hide gui toggle if enabled in settings
-    (void)configuration->hideMenuToggle();
 
     // init alpha values
     MainWindow::updateAlpha();
@@ -272,49 +200,7 @@ void f1x::openauto::autoapp::ui::MainWindow::updateAlpha()
 }
 
 
-void f1x::openauto::autoapp::ui::MainWindow::showTime()
-{
-    QTime time=QTime::currentTime();
-    QDate date=QDate::currentDate();
-    QString time_text=time.toString("hh : mm : ss");
-    this->date_text=date.toString("MM/dd");
 
-    if ((time.second() % 2) == 0) {
-        time_text[3] = ' ';
-        time_text[8] = ' ';
-    }
-
-    ui_->Digital_clock->setText(time_text);
-    ui_->bigClock->setText(time_text);
-    ui_->bigClock2->setText(time_text);
-
-
-    // check connected devices
-    if (localDevice->isValid()) {
-        QString localDeviceName = localDevice->name();
-        QString localDeviceAddress = localDevice->address().toString();
-        QList<QBluetoothAddress> btdevices;
-        btdevices = localDevice->connectedDevices();
-
-        int count = btdevices.count();
-        if (count > 0) {
-            //QBluetoothAddress btdevice = btdevices[0];
-            //QString btmac = btdevice.toString();
-            //ui_->btDeviceCount->setText(QString::number(count));
-            if (ui_->btDevice->isVisible() == false) {
-                ui_->btDevice->show();
-            }
-            if (std::ifstream("/tmp/btdevice")) {
-                ui_->btDevice->setText(configuration_->readFileContent("/tmp/btdevice"));
-            }
-        } else {
-            if (ui_->btDevice->isVisible() == true) {
-                ui_->btDevice->hide();
-                ui_->btDevice->setText("BT-Device");
-            }
-        }
-    }
-}
 
 void f1x::openauto::autoapp::ui::MainWindow::setRetryUSBConnect()
 {

@@ -69,7 +69,7 @@ private slots:
     void updateAlpha();
 
 private slots:
-    void showTime();
+ 
     void tmpChanged();
     void setRetryUSBConnect();
     void resetRetryUSBMessage();
@@ -85,7 +85,6 @@ private:
     QString bversion;
     QString bdate;
 
-    char devModeFile[32] = "/tmp/dev_mode_enabled";
     char wifiButtonFile[32] = "/etc/button_wifi_visible";
     char debugModeFile[32] = "/tmp/usb_debug_mode";
     char lsFile[32] = "/etc/cs_lightsensor";
@@ -111,13 +110,7 @@ private:
     QString custom_button_color_c5 = "186,189,192";
     QString custom_button_color_c6 = "186,189,192";
 
-    QString date_text;
-
     bool wifiButtonForce = false;
-
-
-    bool devModeEnabled = false;
-
 
 
     bool exitMenuVisible = false;
@@ -131,9 +124,6 @@ private:
     bool bluetoothEnabled = false;
 
     bool toggleMute = false;
-    bool oldGUIStyle = false;
-    bool UseBigClock = false;
-    bool NoClock = false;
 
     bool hotspotActive = false;
     bool background_set = false;
