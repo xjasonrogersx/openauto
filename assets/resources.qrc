@@ -37,6 +37,7 @@
         <file>player-hot.png</file>
         <file>coverlogo.png</file>
         <file>black.png</file>
+        <file alias="1777450215290.png">../images/1777450215290.png</file>
         <file>album-hot.png</file>
         <file>Roboto-Regular.ttf</file>
     </qresource>
