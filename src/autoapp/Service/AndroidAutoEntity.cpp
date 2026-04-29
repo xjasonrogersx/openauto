@@ -19,6 +19,8 @@
 #include <aasdk/Channel/Control/ControlServiceChannel.hpp>
 #include <optional>
 #include <f1x/openauto/autoapp/Service/AndroidAutoEntity.hpp>
+#include <f1x/openauto/autoapp/Service/InputSource/InputSourceService.hpp>
+#include <f1x/openauto/autoapp/Projection/InputEvent.hpp>
 #include <f1x/openauto/autoapp/MQTT/MQTTPublisher.hpp>
 #include <f1x/openauto/Common/Log.hpp>
 
@@ -105,6 +107,27 @@ namespace f1x {
             } catch (...) {
               OPENAUTO_LOG(error) << "[AndroidAutoEntity] resume() exception when resuming.";
             }
+          });
+        }
+
+        void AndroidAutoEntity::sendButtonPress(aap_protobuf::service::media::sink::message::KeyCode keyCode) {
+          strand_.dispatch([this, self = this->shared_from_this(), keyCode]() {
+            auto inputSourceService = std::find_if(
+                serviceList_.begin(), serviceList_.end(),
+                [](const auto &service) {
+                  return std::dynamic_pointer_cast<inputsource::InputSourceService>(service) != nullptr;
+                });
+
+            if (inputSourceService == serviceList_.end()) {
+              OPENAUTO_LOG(warning) << "[AndroidAutoEntity] InputSourceService unavailable for media key injection.";
+              return;
+            }
+
+            auto inputService = std::dynamic_pointer_cast<inputsource::InputSourceService>(*inputSourceService);
+            inputService->onButtonEvent(
+                {projection::ButtonEventType::PRESS, projection::WheelDirection::NONE, keyCode});
+            inputService->onButtonEvent(
+                {projection::ButtonEventType::RELEASE, projection::WheelDirection::NONE, keyCode});
           });
         }
 

@@ -19,6 +19,8 @@
 #include <thread>
 #include <algorithm>
 #include <cctype>
+#include <string>
+#include <fstream>
 #include <optional>
 #include <QApplication>
 #include <QScreen>
@@ -30,6 +32,7 @@
 #include <aasdk/USB/AccessoryModeQueryChainFactory.hpp>
 #include <aasdk/USB/AccessoryModeQueryFactory.hpp>
 #include <aasdk/TCP/TCPWrapper.hpp>
+#include <aap_protobuf/service/media/sink/message/KeyCode.pb.h>
 #include <boost/log/core.hpp>
 #include <boost/log/expressions.hpp>
 #include <boost/log/utility/setup.hpp>
@@ -304,12 +307,12 @@ int main(int argc, char* argv[])
     });
 
     QObject::connect(&mainWindow, &autoapp::ui::MainWindow::TriggerScriptNight, [&qApplication]() {
-        system("/opt/crankshaft/service_daynight.sh app night");
+        autoapp::mqtt::publishNightModeState(true);
         OPENAUTO_LOG(debug) << "[AutoApp] MainWindow Night.";
     });
 
     QObject::connect(&mainWindow, &autoapp::ui::MainWindow::TriggerScriptDay, [&qApplication]() {
-        system("/opt/crankshaft/service_daynight.sh app day");
+        autoapp::mqtt::publishNightModeState(false);
         OPENAUTO_LOG(debug) << "[AutoApp] MainWindow Day.";
     });
 
@@ -325,10 +328,51 @@ int main(int argc, char* argv[])
     aasdk::usb::AccessoryModeQueryChainFactory queryChainFactory(usbWrapper, ioService, queryFactory);
     autoapp::service::ServiceFactory serviceFactory(ioService, configuration);
     autoapp::service::AndroidAutoEntityFactory androidAutoEntityFactory(ioService, configuration, serviceFactory);
+    autoapp::mqtt::NightModeStateSubscriber nightModeSubscriber([&mainWindow](bool active) {
+        QMetaObject::invokeMethod(&mainWindow, [&mainWindow, active]() {
+            
+        }, Qt::QueuedConnection);
+    });
+    nightModeSubscriber.start();
 
     auto usbHub(std::make_shared<aasdk::usb::USBHub>(usbWrapper, ioService, queryChainFactory));
     auto connectedAccessoriesEnumerator(std::make_shared<aasdk::usb::ConnectedAccessoriesEnumerator>(usbWrapper, ioService, queryChainFactory));
     auto app = std::make_shared<autoapp::App>(ioService, usbWrapper, tcpWrapper, androidAutoEntityFactory, std::move(usbHub), std::move(connectedAccessoriesEnumerator));
+
+    autoapp::mqtt::MediaPlayerCommandSubscriber mediaPlayerCommandSubscriber([&app](const std::string &command) {
+        if (command == "play") {
+            app->sendAndroidMediaButton(aap_protobuf::service::media::sink::message::KeyCode::KEYCODE_MEDIA_PLAY);
+            return;
+        }
+
+        if (command == "stop") {
+            app->sendAndroidMediaButton(aap_protobuf::service::media::sink::message::KeyCode::KEYCODE_MEDIA_PAUSE);
+            return;
+        }
+
+        if (command == "pause") {
+            app->sendAndroidMediaButton(aap_protobuf::service::media::sink::message::KeyCode::KEYCODE_MEDIA_PAUSE);
+            return;
+        }
+
+        if (command == "next") {
+            app->sendAndroidMediaButton(aap_protobuf::service::media::sink::message::KeyCode::KEYCODE_MEDIA_NEXT);
+            return;
+        }
+
+        if (command == "prev") {
+            app->sendAndroidMediaButton(aap_protobuf::service::media::sink::message::KeyCode::KEYCODE_MEDIA_PREVIOUS);
+            return;
+        }
+
+        if (command == "toggle") {
+            app->sendAndroidMediaButton(aap_protobuf::service::media::sink::message::KeyCode::KEYCODE_MEDIA_PLAY_PAUSE);
+            return;
+        }
+
+        OPENAUTO_LOG(warning) << "[AutoApp] Unknown media command received: " << command;
+    });
+    mediaPlayerCommandSubscriber.start();
 
 #if 1
     app->setConnectionStateHandler([&mainWindow, width, height](bool connected) {
@@ -410,6 +454,8 @@ int main(int argc, char* argv[])
     app->waitForUSBDevice();
 
     auto result = qApplication.exec();
+    mediaPlayerCommandSubscriber.stop();
+    nightModeSubscriber.stop();
 
     std::for_each(threadPool.begin(), threadPool.end(), std::bind(&std::thread::join, std::placeholders::_1));
 

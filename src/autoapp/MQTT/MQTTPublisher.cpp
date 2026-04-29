@@ -2,16 +2,23 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <boost/asio.hpp>
 #include <cctype>
+#include <chrono>
 #include <cstdlib>
+#include <functional>
+#include <memory>
 #include <sstream>
+#include <thread>
 #include <vector>
 
 #include <f1x/openauto/Common/Log.hpp>
 
 namespace f1x::openauto::autoapp::mqtt {
 namespace {
+
+std::atomic<bool> g_nightModeState{false};
 
 std::string getEnvironmentOrDefault(const char *name, const char *defaultValue) {
   if (const char *value = std::getenv(name); value != nullptr && *value != '\0') {
@@ -112,6 +119,188 @@ std::vector<uint8_t> buildPublishPacket(const std::string &topic, const std::str
   return packet;
 }
 
+std::vector<uint8_t> buildSubscribePacket(uint16_t packetId, const std::string &topic) {
+  std::vector<uint8_t> variableHeader;
+  variableHeader.push_back(static_cast<uint8_t>((packetId >> 8) & 0xff));
+  variableHeader.push_back(static_cast<uint8_t>(packetId & 0xff));
+
+  std::vector<uint8_t> payload;
+  appendString(payload, topic);
+  payload.push_back(0x00);
+
+  std::vector<uint8_t> packet;
+  packet.push_back(0x82);
+  appendRemainingLength(packet, variableHeader.size() + payload.size());
+  packet.insert(packet.end(), variableHeader.begin(), variableHeader.end());
+  packet.insert(packet.end(), payload.begin(), payload.end());
+  return packet;
+}
+
+std::vector<uint8_t> buildPubAckPacket(uint16_t packetId) {
+  return {0x40, 0x02, static_cast<uint8_t>((packetId >> 8) & 0xff), static_cast<uint8_t>(packetId & 0xff)};
+}
+
+std::string trimAndLower(const std::string &value) {
+  const auto begin = std::find_if_not(value.begin(), value.end(), [](unsigned char ch) {
+    return std::isspace(ch) != 0;
+  });
+
+  if (begin == value.end()) {
+    return "";
+  }
+
+  const auto end = std::find_if_not(value.rbegin(), value.rend(), [](unsigned char ch) {
+    return std::isspace(ch) != 0;
+  }).base();
+
+  std::string normalized(begin, end);
+  std::transform(normalized.begin(), normalized.end(), normalized.begin(), [](unsigned char ch) {
+    return static_cast<char>(std::tolower(ch));
+  });
+  return normalized;
+}
+
+std::string removeWhitespace(const std::string &value) {
+  std::string normalized;
+  normalized.reserve(value.size());
+
+  for (const char ch : value) {
+    if (std::isspace(static_cast<unsigned char>(ch)) == 0) {
+      normalized.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
+    }
+  }
+
+  return normalized;
+}
+
+bool tryParseNightModePayload(const std::string &payload, bool &active) {
+  const std::string normalized = trimAndLower(payload);
+  if (normalized == "1" || normalized == "true" || normalized == "on" || normalized == "night" ||
+      normalized == "enabled") {
+    active = true;
+    return true;
+  }
+
+  if (normalized == "0" || normalized == "false" || normalized == "off" || normalized == "day" ||
+      normalized == "disabled") {
+    active = false;
+    return true;
+  }
+
+  const std::string compact = removeWhitespace(payload);
+  if (compact.find("\"active\":true") != std::string::npos ||
+      compact.find("\"night_mode\":true") != std::string::npos ||
+      compact.find("\"mode\":\"night\"") != std::string::npos) {
+    active = true;
+    return true;
+  }
+
+  if (compact.find("\"active\":false") != std::string::npos ||
+      compact.find("\"night_mode\":false") != std::string::npos ||
+      compact.find("\"mode\":\"day\"") != std::string::npos) {
+    active = false;
+    return true;
+  }
+
+  return false;
+}
+
+bool tryParseMediaPlayerCommand(const std::string &payload, std::string &command) {
+  const std::string normalized = trimAndLower(payload);
+  if (normalized == "play" || normalized == "start") {
+    command = "play";
+    return true;
+  }
+
+  if (normalized == "stop") {
+    command = "stop";
+    return true;
+  }
+
+  if (normalized == "pause") {
+    command = "pause";
+    return true;
+  }
+
+  if (normalized == "next") {
+    command = "next";
+    return true;
+  }
+
+  if (normalized == "toggle" || normalized == "play_pause") {
+    command = "toggle";
+    return true;
+  }
+
+  if (normalized == "prev" || normalized == "previous") {
+    command = "prev";
+    return true;
+  }
+
+  const std::string compact = removeWhitespace(payload);
+
+  if (compact.find("\"action\":\"play\"") != std::string::npos ||
+      compact.find("\"action\":\"start\"") != std::string::npos) {
+    command = "play";
+    return true;
+  }
+
+  if (compact.find("\"action\":\"stop\"") != std::string::npos) {
+    command = "stop";
+    return true;
+  }
+
+  if (compact.find("\"action\":\"pause\"") != std::string::npos) {
+    command = "pause";
+    return true;
+  }
+
+  if (compact.find("\"action\":\"next\"") != std::string::npos) {
+    command = "next";
+    return true;
+  }
+
+  if (compact.find("\"action\":\"toggle\"") != std::string::npos ||
+      compact.find("\"action\":\"play_pause\"") != std::string::npos) {
+    command = "toggle";
+    return true;
+  }
+
+  if (compact.find("\"action\":\"prev\"") != std::string::npos ||
+      compact.find("\"action\":\"previous\"") != std::string::npos) {
+    command = "prev";
+    return true;
+  }
+
+  return false;
+}
+
+std::size_t readRemainingLength(boost::asio::ip::tcp::socket &socket) {
+  std::size_t multiplier = 1;
+  std::size_t value = 0;
+  uint8_t encodedByte = 0;
+
+  do {
+    boost::asio::read(socket, boost::asio::buffer(&encodedByte, 1));
+    value += static_cast<std::size_t>(encodedByte & 127) * multiplier;
+    multiplier *= 128;
+  } while ((encodedByte & 128) != 0);
+
+  return value;
+}
+
+bool readPacket(boost::asio::ip::tcp::socket &socket, uint8_t &header, std::vector<uint8_t> &payload) {
+  boost::asio::read(socket, boost::asio::buffer(&header, 1));
+  const std::size_t remainingLength = readRemainingLength(socket);
+  payload.assign(remainingLength, 0);
+
+  if (remainingLength > 0) {
+    boost::asio::read(socket, boost::asio::buffer(payload.data(), payload.size()));
+  }
+
+  return true;
+}
+
 }  // namespace
 
 Publisher &Publisher::instance() {
@@ -151,6 +340,19 @@ void Publisher::publishBatteryStatus(uint32_t batteryLevel,
 
   payload << '}';
   publish("battery", payload.str(), true);
+}
+
+void Publisher::publishNightModeState(bool active) {
+  g_nightModeState.store(active, std::memory_order_release);
+  std::ostringstream payload;
+  payload << "{\"active\":" << (active ? "true" : "false")
+          << ",\"mode\":\"" << (active ? "night" : "day")
+          << "\",\"source\":\"android_auto\"}";
+  publish("night_mode", payload.str(), true);
+}
+
+bool currentNightModeState() {
+  return g_nightModeState.load(std::memory_order_acquire);
 }
 
 void Publisher::publishDebugMessage(const std::string &component,
@@ -211,10 +413,373 @@ void publishBatteryStatus(uint32_t batteryLevel,
   Publisher::instance().publishBatteryStatus(batteryLevel, timeRemainingSeconds, criticalBattery);
 }
 
+void publishNightModeState(bool active) {
+  Publisher::instance().publishNightModeState(active);
+}
+
 void publishDebugMessage(const std::string &component,
                          const std::string &event,
                          const std::string &message) {
   Publisher::instance().publishDebugMessage(component, event, message);
+}
+
+class NightModeStateSubscriber::Impl {
+ public:
+  explicit Impl(Handler handler)
+      : enabled_(parseEnabled(std::getenv("OPENAUTO_MQTT_ENABLED"))),
+        host_(getEnvironmentOrDefault("OPENAUTO_MQTT_HOST", "127.0.0.1")),
+        port_(getEnvironmentOrDefault("OPENAUTO_MQTT_PORT", "1883")),
+        clientId_(getEnvironmentOrDefault("OPENAUTO_MQTT_CLIENT_ID", "openauto")),
+        topicPrefix_(getEnvironmentOrDefault("OPENAUTO_MQTT_TOPIC_PREFIX", "openauto/phone")),
+        handler_(std::move(handler)) {}
+
+  ~Impl() {
+    stop();
+  }
+
+  void start() {
+    if (!enabled_ || worker_.joinable()) {
+      return;
+    }
+
+    stopRequested_.store(false, std::memory_order_release);
+    worker_ = std::thread([this]() { run(); });
+  }
+
+  void stop() {
+    stopRequested_.store(true, std::memory_order_release);
+    closeSocket();
+
+    if (worker_.joinable()) {
+      worker_.join();
+    }
+  }
+
+ private:
+  void run() {
+    if (!enabled_) {
+      return;
+    }
+
+    const std::string topic = topicPrefix_ + "/night_mode";
+
+    while (!stopRequested_.load(std::memory_order_acquire)) {
+      try {
+        boost::asio::io_service ioService;
+        boost::asio::ip::tcp::resolver resolver(ioService);
+        auto socket = std::make_shared<boost::asio::ip::tcp::socket>(ioService);
+
+        {
+          const std::lock_guard<std::mutex> lock(socketMutex_);
+          socket_ = socket;
+        }
+
+        auto endpoints = resolver.resolve(host_, port_);
+        boost::asio::connect(*socket, endpoints);
+
+        boost::asio::write(*socket, boost::asio::buffer(buildConnectPacket(clientId_ + "-night-mode")));
+
+        uint8_t header = 0;
+        std::vector<uint8_t> payload;
+        readPacket(*socket, header, payload);
+        if (header != 0x20 || payload.size() != 2 || payload[1] != 0x00) {
+          OPENAUTO_LOG(warning) << "[MQTT] Night mode state subscriber connection rejected.";
+          closeSocket();
+          waitBeforeReconnect();
+          continue;
+        }
+
+        constexpr uint16_t subscribePacketId = 1;
+        const auto subscribePacket = buildSubscribePacket(subscribePacketId, topic);
+        boost::asio::write(*socket, boost::asio::buffer(subscribePacket));
+
+        readPacket(*socket, header, payload);
+        if (header != 0x90 || payload.size() < 3 || payload[2] == 0x80) {
+          OPENAUTO_LOG(warning) << "[MQTT] Night mode subscribe failed for topic " << topic;
+          closeSocket();
+          waitBeforeReconnect();
+          continue;
+        }
+
+        OPENAUTO_LOG(info) << "[MQTT] Subscribed to night mode state on " << topic;
+
+        while (!stopRequested_.load(std::memory_order_acquire)) {
+          readPacket(*socket, header, payload);
+          const uint8_t packetType = header & 0xf0;
+          if (packetType != 0x30) {
+            continue;
+          }
+
+          if (payload.size() < 2) {
+            continue;
+          }
+
+          const std::size_t topicLength = (static_cast<std::size_t>(payload[0]) << 8) | payload[1];
+          if (payload.size() < 2 + topicLength) {
+            continue;
+          }
+
+          const std::string messageTopic(payload.begin() + 2, payload.begin() + 2 + topicLength);
+          std::size_t offset = 2 + topicLength;
+          const uint8_t qos = static_cast<uint8_t>((header >> 1) & 0x03);
+          uint16_t packetId = 0;
+
+          if (qos > 0) {
+            if (payload.size() < offset + 2) {
+              continue;
+            }
+
+            packetId = static_cast<uint16_t>((payload[offset] << 8) | payload[offset + 1]);
+            offset += 2;
+          }
+
+          const std::string message(payload.begin() + static_cast<std::ptrdiff_t>(offset), payload.end());
+          if (messageTopic == topic) {
+            bool active = false;
+            if (tryParseNightModePayload(message, active)) {
+              g_nightModeState.store(active, std::memory_order_release);
+              handler_(active);
+            } else {
+              OPENAUTO_LOG(warning) << "[MQTT] Ignoring invalid night mode payload: " << message;
+            }
+          }
+
+          if (qos == 1) {
+            const auto pubAckPacket = buildPubAckPacket(packetId);
+            boost::asio::write(*socket, boost::asio::buffer(pubAckPacket));
+          }
+        }
+      } catch (const std::exception &e) {
+        if (!stopRequested_.load(std::memory_order_acquire)) {
+          OPENAUTO_LOG(warning) << "[MQTT] Night mode state subscriber disconnected: " << e.what();
+          waitBeforeReconnect();
+        }
+      }
+
+      closeSocket();
+    }
+  }
+
+  void waitBeforeReconnect() {
+    for (int attempt = 0; attempt < 50 && !stopRequested_.load(std::memory_order_acquire); ++attempt) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+  }
+
+  void closeSocket() {
+    const std::lock_guard<std::mutex> lock(socketMutex_);
+    if (socket_ != nullptr) {
+      boost::system::error_code ec;
+      socket_->close(ec);
+      socket_.reset();
+    }
+  }
+
+  bool enabled_;
+  std::string host_;
+  std::string port_;
+  std::string clientId_;
+  std::string topicPrefix_;
+  Handler handler_;
+  std::atomic<bool> stopRequested_{false};
+  std::thread worker_;
+  std::mutex socketMutex_;
+  std::shared_ptr<boost::asio::ip::tcp::socket> socket_;
+};
+
+class MediaPlayerCommandSubscriber::Impl {
+ public:
+  explicit Impl(Handler handler)
+      : enabled_(parseEnabled(std::getenv("OPENAUTO_MQTT_ENABLED"))),
+        host_(getEnvironmentOrDefault("OPENAUTO_MQTT_HOST", "127.0.0.1")),
+        port_(getEnvironmentOrDefault("OPENAUTO_MQTT_PORT", "1883")),
+        clientId_(getEnvironmentOrDefault("OPENAUTO_MQTT_CLIENT_ID", "openauto")),
+        topicPrefix_(getEnvironmentOrDefault("OPENAUTO_MQTT_TOPIC_PREFIX", "openauto/phone")),
+        handler_(std::move(handler)) {}
+
+  ~Impl() {
+    stop();
+  }
+
+  void start() {
+    if (!enabled_ || worker_.joinable()) {
+      return;
+    }
+
+    stopRequested_.store(false, std::memory_order_release);
+    worker_ = std::thread([this]() { run(); });
+  }
+
+  void stop() {
+    stopRequested_.store(true, std::memory_order_release);
+    closeSocket();
+
+    if (worker_.joinable()) {
+      worker_.join();
+    }
+  }
+
+ private:
+  void run() {
+    if (!enabled_) {
+      return;
+    }
+
+    const std::string topic = topicPrefix_ + "/media_player/command";
+
+    while (!stopRequested_.load(std::memory_order_acquire)) {
+      try {
+        boost::asio::io_service ioService;
+        boost::asio::ip::tcp::resolver resolver(ioService);
+        auto socket = std::make_shared<boost::asio::ip::tcp::socket>(ioService);
+
+        {
+          const std::lock_guard<std::mutex> lock(socketMutex_);
+          socket_ = socket;
+        }
+
+        auto endpoints = resolver.resolve(host_, port_);
+        boost::asio::connect(*socket, endpoints);
+
+        boost::asio::write(*socket, boost::asio::buffer(buildConnectPacket(clientId_ + "-media-player-cmd")));
+
+        uint8_t header = 0;
+        std::vector<uint8_t> payload;
+        readPacket(*socket, header, payload);
+        if (header != 0x20 || payload.size() != 2 || payload[1] != 0x00) {
+          OPENAUTO_LOG(warning) << "[MQTT] Media player command subscriber connection rejected.";
+          closeSocket();
+          waitBeforeReconnect();
+          continue;
+        }
+
+        constexpr uint16_t subscribePacketId = 1;
+        const auto subscribePacket = buildSubscribePacket(subscribePacketId, topic);
+        boost::asio::write(*socket, boost::asio::buffer(subscribePacket));
+
+        readPacket(*socket, header, payload);
+        if (header != 0x90 || payload.size() < 3 || payload[2] == 0x80) {
+          OPENAUTO_LOG(warning) << "[MQTT] Media player subscribe failed for topic " << topic;
+          closeSocket();
+          waitBeforeReconnect();
+          continue;
+        }
+
+        OPENAUTO_LOG(info) << "[MQTT] Subscribed to media player commands on " << topic;
+
+        while (!stopRequested_.load(std::memory_order_acquire)) {
+          readPacket(*socket, header, payload);
+          const uint8_t packetType = header & 0xf0;
+          if (packetType != 0x30) {
+            continue;
+          }
+
+          if (payload.size() < 2) {
+            continue;
+          }
+
+          const std::size_t topicLength = (static_cast<std::size_t>(payload[0]) << 8) | payload[1];
+          if (payload.size() < 2 + topicLength) {
+            continue;
+          }
+
+          const std::string messageTopic(payload.begin() + 2, payload.begin() + 2 + topicLength);
+          std::size_t offset = 2 + topicLength;
+          const uint8_t qos = static_cast<uint8_t>((header >> 1) & 0x03);
+          const bool retained = (header & 0x01) != 0;
+          uint16_t packetId = 0;
+
+          if (qos > 0) {
+            if (payload.size() < offset + 2) {
+              continue;
+            }
+
+            packetId = static_cast<uint16_t>((payload[offset] << 8) | payload[offset + 1]);
+            offset += 2;
+          }
+
+          const std::string message(payload.begin() + static_cast<std::ptrdiff_t>(offset), payload.end());
+
+          if (messageTopic == topic) {
+            if (retained) {
+              OPENAUTO_LOG(warning) << "[MQTT] Ignoring retained media command payload.";
+            } else {
+              std::string command;
+              if (tryParseMediaPlayerCommand(message, command)) {
+                handler_(command);
+              } else {
+                OPENAUTO_LOG(warning) << "[MQTT] Ignoring invalid media command payload: " << message;
+              }
+            }
+          }
+
+          if (qos == 1) {
+            const auto pubAckPacket = buildPubAckPacket(packetId);
+            boost::asio::write(*socket, boost::asio::buffer(pubAckPacket));
+          }
+        }
+      } catch (const std::exception &e) {
+        if (!stopRequested_.load(std::memory_order_acquire)) {
+          OPENAUTO_LOG(warning) << "[MQTT] Media player command subscriber disconnected: " << e.what();
+          waitBeforeReconnect();
+        }
+      }
+
+      closeSocket();
+    }
+  }
+
+  void waitBeforeReconnect() {
+    for (int attempt = 0; attempt < 50 && !stopRequested_.load(std::memory_order_acquire); ++attempt) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+  }
+
+  void closeSocket() {
+    const std::lock_guard<std::mutex> lock(socketMutex_);
+    if (socket_ != nullptr) {
+      boost::system::error_code ec;
+      socket_->close(ec);
+      socket_.reset();
+    }
+  }
+
+  bool enabled_;
+  std::string host_;
+  std::string port_;
+  std::string clientId_;
+  std::string topicPrefix_;
+  Handler handler_;
+  std::atomic<bool> stopRequested_{false};
+  std::thread worker_;
+  std::mutex socketMutex_;
+  std::shared_ptr<boost::asio::ip::tcp::socket> socket_;
+};
+
+NightModeStateSubscriber::NightModeStateSubscriber(Handler handler)
+    : impl_(std::make_unique<Impl>(std::move(handler))) {}
+
+NightModeStateSubscriber::~NightModeStateSubscriber() = default;
+
+void NightModeStateSubscriber::start() {
+  impl_->start();
+}
+
+void NightModeStateSubscriber::stop() {
+  impl_->stop();
+}
+
+MediaPlayerCommandSubscriber::MediaPlayerCommandSubscriber(Handler handler)
+    : impl_(std::make_unique<Impl>(std::move(handler))) {}
+
+MediaPlayerCommandSubscriber::~MediaPlayerCommandSubscriber() = default;
+
+void MediaPlayerCommandSubscriber::start() {
+  impl_->start();
+}
+
+void MediaPlayerCommandSubscriber::stop() {
+  impl_->stop();
 }
 
 }  // namespace f1x::openauto::autoapp::mqtt

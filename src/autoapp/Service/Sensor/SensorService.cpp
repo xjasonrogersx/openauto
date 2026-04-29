@@ -18,6 +18,7 @@
 
 
 #include <f1x/openauto/Common/Log.hpp>
+#include <f1x/openauto/autoapp/MQTT/MQTTPublisher.hpp>
 #include <f1x/openauto/autoapp/Service/Sensor/SensorService.hpp>
 #include <fstream>
 #include <cmath>
@@ -42,9 +43,8 @@ namespace f1x::openauto::autoapp::service::sensor {
         this->gpsEnabled_ = true;
       }
 
-      if (is_file_exist("/tmp/night_mode_enabled")) {
-        this->isNight = true;
-      }
+      this->isNight = ::f1x::openauto::autoapp::mqtt::currentNightModeState();
+      ::f1x::openauto::autoapp::mqtt::publishNightModeState(this->isNight);
       this->sensorPolling();
 
       OPENAUTO_LOG(info) << "[SensorService] start()";
@@ -230,7 +230,7 @@ namespace f1x::openauto::autoapp::service::sensor {
           return;
         }
         
-        this->isNight = is_file_exist("/tmp/night_mode_enabled");
+        this->isNight = ::f1x::openauto::autoapp::mqtt::currentNightModeState();
         if (this->previous != this->isNight && !this->firstRun) {
           this->previous = this->isNight;
           this->sendNightData();
@@ -267,12 +267,6 @@ namespace f1x::openauto::autoapp::service::sensor {
         }
       });
     }
-  }
-
-  bool SensorService::is_file_exist(const char *fileName) {
-    //jr OPENAUTO_LOG(info) << "[SensorService] is_file_exist()";
-    std::ifstream ifile(fileName, std::ios::in);
-    return ifile.good();
   }
 
   void SensorService::onChannelError(const aasdk::error::Error &e) {

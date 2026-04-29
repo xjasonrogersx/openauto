@@ -111,8 +111,7 @@ private slots:
     void on_pushButtonBrightness2_clicked();
     void on_pushButtonVolume_clicked();
     void on_pushButtonVolume2_clicked();
-    void switchGuiToDay();
-    void switchGuiToNight();
+ 
     void showTime();
     void cameraControlShow();
     void cameraControlHide();
@@ -131,7 +130,7 @@ private slots:
     void customButtonPressed6();
     void playerShow();
     void playerHide();
-    void updateBG();
+
 
     void on_horizontalSliderProgressPlayer_sliderMoved(int position);
     void on_horizontalSliderVolumePlayer_sliderMoved(int position);
@@ -180,7 +179,6 @@ private:
     QString bversion;
     QString bdate;
 
-    char nightModeFile[32] = "/tmp/night_mode_enabled";
     char devModeFile[32] = "/tmp/dev_mode_enabled";
     char wifiButtonFile[32] = "/etc/button_wifi_visible";
     char cameraButtonFile[32] = "/etc/button_camera_visible";
@@ -225,11 +223,7 @@ private:
 
     bool devModeEnabled = false;
 
-    bool wallpaperDayFileExists = false;
-    bool wallpaperNightFileExists = false;
-    bool wallpaperClassicDayFileExists = false;
-    bool wallpaperClassicNightFileExists = false;
-    bool wallpaperEQFileExists = false;
+
 
     bool exitMenuVisible = false;
 
@@ -246,20 +240,12 @@ private:
     bool UseBigClock = false;
     bool NoClock = false;
 
-    bool c1ButtonForce = false;
-    bool c2ButtonForce = false;
-    bool c3ButtonForce = false;
-    bool c4ButtonForce = false;
-    bool c5ButtonForce = false;
-    bool c6ButtonForce = false;
-
     bool hotspotActive = false;
     int currentPlaylistIndex = 0;
     bool background_set = false;
     bool mediacontentchanged = true;
 
     bool lightsensor = false;
-    bool holidaybg = false;
 
     bool csmtupdate = false;
     bool udevupdate = false;

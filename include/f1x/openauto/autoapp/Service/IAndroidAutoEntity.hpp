@@ -19,6 +19,7 @@
 #pragma once
 
 #include <memory>
+#include <aap_protobuf/service/media/sink/message/KeyCode.pb.h>
 #include <f1x/openauto/autoapp/Service/IAndroidAutoEntityEventHandler.hpp>
 
 namespace f1x
@@ -41,6 +42,7 @@ public:
     virtual void stop() = 0;
     virtual void pause() = 0;
     virtual void resume() = 0;
+    virtual void sendButtonPress(aap_protobuf::service::media::sink::message::KeyCode keyCode) = 0;
 };
 
 }

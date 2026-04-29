@@ -67,8 +67,6 @@ namespace f1x::openauto::autoapp::service::sensor {
 
     void sendGPSLocationData();
 
-    bool is_file_exist(const char *filename);
-
     void sensorPolling();
 
     bool firstRun = true;

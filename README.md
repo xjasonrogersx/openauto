@@ -49,7 +49,6 @@ OpenAuto and helper scripts use `/tmp` files as lightweight IPC/status flags.
 | `/tmp/return_value`   | `helpers/autoapp_helper`  | `src/autoapp/UI/SettingsWindow.cpp`| `#`-delimited system snapshot (volume, timer state text, DAC info).  |
 | `/tmp/temp_recent_list`   | `helpers/autoapp_helper`  | `src/autoapp/UI/MainWindow.cpp`, `src/autoapp/UI/ConnectDialog.cpp`| Recently seen hotspot client/IP list for wireless connection UI hints.   |
 | `/tmp/custombrightness`   | `helpers/crankshaft`  | `src/autoapp/UI/MainWindow.cpp`, `helpers/crankshaft`  | Current custom brightness level used by custom brightness command workflows. |
-| `/tmp/night_mode_enabled` | External day/night or sensor service scripts  | `src/autoapp/UI/MainWindow.cpp`, `src/autoapp/Service/Sensor/SensorService.cpp`, `helpers/crankshaft`  | Day/night mode state flag (night mode active when file exists).  |
 | `/tmp/blankscreen`| `helpers/crankshaft`  | `src/autoapp/UI/MainWindow.cpp`| Full UI hidden/display-off mode indicator.   |
 | `/tmp/screensaver`| `helpers/crankshaft`  | `src/autoapp/UI/MainWindow.cpp`| Screensaver/clock-only mode indicator.   |
 | `/tmp/blackscreen`| `helpers/crankshaft`  | `src/autoapp/UI/MainWindow.cpp`| Force black background mode for custom command workflows.|
@@ -164,9 +163,48 @@ openauto/phone/debug {"component":"audio","event":"stream_stopped","message":"ch
 | AA guidance stream active (media also active) | 0% (stay muted) |
 | Neither AA stream active | 100% |
 
+
+#### Microphone handling
+
+OpenAuto captures microphone audio locally on the head unit and sends it to the phone over Android Auto's microphone media-source channel.
+
+Data path:
+
+```
+Microphone (USB / HAT / onboard input)
+    │  PCM capture (mono, 16-bit, 16 kHz)
+    ▼
+QtAudioInput (QAudioInput)
+    │  onReadyRead() chunks
+    ▼
+MediaSourceService / MicrophoneMediaSourceService
+    │  sendMediaSourceWithTimestampIndication()
+    ▼
+Android phone (Assistant / voice recognition)
+```
+
+Operational behavior:
+
+- If Android requests microphone open, OpenAuto starts local capture and streams PCM frames.
+- If no input device is available (or open fails), OpenAuto returns an internal microphone error to Android.
+- There is no local fallback microphone engine in OpenAuto itself. Any fallback behavior (for example using the handset mic) is controlled by the phone/Assistant side.
+
+#### Hotword and voice trigger
+
+- Hotword detection (for example, "Hey Google") is performed on the phone, not by OpenAuto.
+- A voice-command button/key can also be used to trigger voice input manually.
+- Pressing the button is optional in normal operation when phone-side hotword triggering is available.
+
+
 #### Mixer script
 
-See `src/audio_mixer/audio_mixer.py`. Run as a systemd user service alongside openauto and dab_tuner.
+See `audio_mixer/audio_mixer.py`. Run as a systemd service alongside openauto and dab_tuner.
+
+Important environment knobs:
+
+- `DAB_SINK_NAME`: substring used to find the DAB sink-input in `wpctl status` (default `ffmpeg`)
+- `DUCK_LEVEL`: ducked DAB volume for guidance-only state (default `0.2` = 20%)
+- `OPENAUTO_TOPIC_PREFIX`: base topic prefix (default `openauto/phone`)
 
 ```ini
 # /etc/systemd/system/audio-mixer.service
@@ -175,10 +213,11 @@ Description=Audio Mixer / Ducking Service
 After=network.target pipewire.service
 
 [Service]
-ExecStart=/usr/bin/python3 /home/pi/openauto/src/audio_mixer/audio_mixer.py
+ExecStart=/usr/bin/python3 /home/pi/openauto/audio_mixer/audio_mixer.py
 Restart=on-failure
 Environment=MQTT_HOST=127.0.0.1
 Environment=DAB_SINK_NAME=ffmpeg
+Environment=DUCK_LEVEL=0.20
 Environment=OPENAUTO_TOPIC_PREFIX=openauto/phone
 
 [Install]
@@ -187,4 +226,118 @@ WantedBy=multi-user.target
 
 
 ## night_mode
+
+OpenAuto now treats MQTT as the in-process source of truth for day/night mode. The `night_mode` topic is retained so OpenAuto can recover the current state after reconnect or restart without relying on `/tmp/night_mode_enabled`.
+
+### Topic
+
+- Topic: `openauto/phone/night_mode`
+- Retained: `true`
+- QoS: `1` recommended
+
+### Accepted payloads
+
+OpenAuto accepts either a small JSON payload or a simple text value.
+
+JSON examples:
+
+```json
+{"active":true}
+{"active":false}
+{"mode":"night"}
+{"mode":"day"}
+```
+
+Text examples:
+
+```text
+night
+day
+true
+false
+on
+off
+1
+0
+```
+
+### mosquitto_pub examples
+
+Set night mode on:
+
+```bash
+mosquitto_pub -h 127.0.0.1 -p 1883 -q 1 -r -t openauto/phone/night_mode -m '{"active":true}'
+```
+
+Set night mode off:
+
+```bash
+mosquitto_pub -h 127.0.0.1 -p 1883 -q 1 -r -t openauto/phone/night_mode -m '{"active":false}'
+```
+
+Equivalent plain-text commands:
+
+```bash
+mosquitto_pub -h 127.0.0.1 -p 1883 -q 1 -r -t openauto/phone/night_mode -m night
+mosquitto_pub -h 127.0.0.1 -p 1883 -q 1 -r -t openauto/phone/night_mode -m day
+```
+
+Inspect the currently retained state:
+
+```bash
+mosquitto_sub -h 127.0.0.1 -p 1883 -t openauto/phone/night_mode -C 1 -v
+```
+
+### Behavior
+
+- OpenAuto publishes retained state updates to `openauto/phone/night_mode` when the UI day/night buttons are used.
+- OpenAuto subscribes to the same retained topic and applies incoming state updates to its UI and Android Auto sensor state.
+- External integrations such as a headlight or sunset controller should publish the effective mode directly to the retained topic.
+
+## Media controls
+
+OpenAuto supports MQTT-based media controls so external integrations (for example steering-wheel button bridges) can trigger Android app playback through Android Auto key events.
+
+### Topics
+
+- Command topic: `openauto/phone/media_player/command`
+- Command retained: `false` (required to avoid stale command replay)
+- Command QoS: `1` recommended
+
+### Command payloads
+
+Accepted command payloads:
+
+- Plain text: `play`, `start`, `stop`, `pause`, `next`, `prev`, `toggle`
+- JSON: `{"action":"play"}` (same action values as above)
+
+`start` is treated as an alias for `play`.
+
+### mosquitto_pub examples
+
+Start playback:
+
+```bash
+mosquitto_pub -h 127.0.0.1 -p 1883 -q 1 -r false -t openauto/phone/media_player/command -m '{"action":"play"}'
+```
+
+Stop playback:
+
+```bash
+mosquitto_pub -h 127.0.0.1 -p 1883 -q 1 -r false -t openauto/phone/media_player/command -m '{"action":"stop"}'
+```
+
+Simple text command examples:
+
+```bash
+mosquitto_pub -h 127.0.0.1 -p 1883 -q 1 -t openauto/phone/media_player/command -m start
+mosquitto_pub -h 127.0.0.1 -p 1883 -q 1 -t openauto/phone/media_player/command -m stop
+```
+
+Optional navigation commands:
+
+```bash
+mosquitto_pub -h 127.0.0.1 -p 1883 -q 1 -t openauto/phone/media_player/command -m next
+mosquitto_pub -h 127.0.0.1 -p 1883 -q 1 -t openauto/phone/media_player/command -m prev
+```
 
